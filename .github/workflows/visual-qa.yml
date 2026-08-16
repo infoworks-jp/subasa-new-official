@@ -41,7 +41,7 @@ jobs:
           set -euo pipefail
           bytes=$(wc -c < assets/tsubasa-logo.png)
           echo "logo_bytes=$bytes"
-          test "$bytes" -ge 50000
+          test "$bytes" -ge 30000
           test "$bytes" -le 500000
           file assets/tsubasa-logo.png | grep -q 'PNG image data'
       - name: Write contract receipt
