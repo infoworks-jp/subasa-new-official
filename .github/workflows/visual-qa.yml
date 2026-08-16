@@ -13,22 +13,15 @@ jobs:
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-      - name: Detect installed assets
-        id: ready
+      - name: Require installed assets
         shell: bash
         run: |
-          if test -s assets/ultimate-miso.webp && test -s assets/tsubasa-ramen.webp && test -s assets/menu-ja.webp; then
-            echo 'value=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'value=false' >> "$GITHUB_OUTPUT"
-            echo 'Assets not installed yet; QA intentionally deferred.'
-          fi
+          set -euo pipefail
+          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/susukino-top.webp assets/store-interior.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp assets/logo-vertical.svg; do test -s "$f"; done
       - uses: actions/setup-node@v4
-        if: steps.ready.outputs.value == 'true'
         with:
           node-version: 22
       - name: Verify static contract
-        if: steps.ready.outputs.value == 'true'
         run: |
           set -euo pipefail
           test -f index.html && test -f style.css && test -f app.js
@@ -36,24 +29,22 @@ jobs:
           grep -q 'つばさ<br>ラーメン' index.html
           grep -q '11:00 — 03:00' index.html
           grep -q '毎週月曜日 定休' index.html
-          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp assets/logo-vertical.svg; do test -s "$f"; done
+          ! grep -R 'tsubasa-official-site/main/assets' index.html style.css app.js
       - name: Install Playwright
-        if: steps.ready.outputs.value == 'true'
         run: |
           npm init -y >/dev/null 2>&1
           npm install --silent playwright@1.55.0
           npx playwright install --with-deps chromium
       - name: Start preview
-        if: steps.ready.outputs.value == 'true'
         run: |
           python3 -m http.server 4173 >/tmp/server.log 2>&1 &
           sleep 2
       - name: Browser QA and screenshots
-        if: steps.ready.outputs.value == 'true'
         run: |
-          cat > /tmp/qa.mjs <<'JS'
+          cat > qa.mjs <<'JS'
           import { chromium } from 'playwright';
           import fs from 'fs';
+          fs.mkdirSync('qa',{recursive:true});
           const browser=await chromium.launch({headless:true});
           const cases=[['desktop',1440,1100],['mobile',390,844]];
           const report={passed:true,cases:{}};
@@ -62,36 +53,52 @@ jobs:
             const bad=[];
             page.on('console',m=>{if(m.type()==='error') bad.push('console:'+m.text())});
             page.on('pageerror',e=>bad.push('pageerror:'+e.message));
+            page.on('response',r=>{if(r.status()>=400) bad.push(`http:${r.status()}:${r.url()}`)});
             await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
             await page.waitForTimeout(4600);
             const data=await page.evaluate(()=>({
               title:document.title,
               text:document.body.innerText,
               imgs:[...document.images].map(i=>({src:i.getAttribute('src'),w:i.naturalWidth,h:i.naturalHeight,complete:i.complete})),
+              logoOpacity:getComputedStyle(document.querySelector('.vertical-logo')).opacity,
+              heroBg:getComputedStyle(document.querySelector('.hero-photo')).backgroundImage,
+              shopBg:getComputedStyle(document.querySelector('.shop-photo')).backgroundImage,
               scrollHeight:document.documentElement.scrollHeight
             }));
             for(const i of data.imgs) if(!i.complete||i.w===0||i.h===0) bad.push('broken:'+i.src);
             for(const s of ['究極の','つばさ','11:00','月曜日']) if(!data.text.includes(s)) bad.push('missing-text:'+s);
+            if(Number(data.logoOpacity)<0.9) bad.push('logo-not-visible:'+data.logoOpacity);
+            if(!data.heroBg.includes('susukino-top.webp')) bad.push('hero-background');
+            if(!data.shopBg.includes('store-interior.webp')) bad.push('shop-background');
             await page.screenshot({path:`qa/${name}-full.png`,fullPage:true});
             await page.locator('#top').screenshot({path:`qa/${name}-top.png`});
             await page.locator('#signature').screenshot({path:`qa/${name}-miso.png`});
             await page.locator('.signature-tsubasa').screenshot({path:`qa/${name}-tsubasa.png`});
             await page.locator('#menu').scrollIntoViewIfNeeded();
-            if(await page.locator('[data-menu]').count()!==4) bad.push('menu-buttons');
-            report.cases[name]={bad,images:data.imgs.length,scrollHeight:data.scrollHeight};
+            const buttons=page.locator('[data-menu]');
+            if(await buttons.count()!==4) bad.push('menu-buttons');
+            else {
+              for(let i=0;i<4;i++){
+                await buttons.nth(i).click();
+                await page.locator('#menuDialog').waitFor({state:'visible'});
+                await page.waitForTimeout(200);
+                const menu=await page.locator('#menuImage').evaluate(img=>({src:img.getAttribute('src'),w:img.naturalWidth,h:img.naturalHeight,complete:img.complete}));
+                if(!menu.complete||menu.w===0||menu.h===0) bad.push('broken-menu:'+menu.src);
+                await page.locator('.close').click();
+              }
+            }
+            report.cases[name]={bad,images:data.imgs.length,logoOpacity:data.logoOpacity,heroBg:data.heroBg,shopBg:data.shopBg,scrollHeight:data.scrollHeight};
             if(bad.length) report.passed=false;
             await page.close();
           }
           await browser.close();
-          fs.mkdirSync('qa',{recursive:true});
           fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2));
           console.log(JSON.stringify(report,null,2));
           if(!report.passed) process.exit(1);
           JS
-          mkdir -p qa
-          node /tmp/qa.mjs
+          node qa.mjs
       - uses: actions/upload-artifact@v4
-        if: always() && steps.ready.outputs.value == 'true'
+        if: always()
         with:
           name: tsubasa-visual-qa
           path: qa
