@@ -98,7 +98,7 @@ jobs:
               if(metrics.yPct < .05 || metrics.yPct > .16) errors.push(`mobile-y-out:${metrics.yPct}`);
             }
             if(copy){const overlap=!(box.x+box.width<=copy.x||copy.x+copy.width<=box.x||box.y+box.height<=copy.y||copy.y+copy.height<=box.y);if(overlap)errors.push('logo-overlaps-copy');}
-            await page.locator('#top').screenshot({path:`evidence/${name}-hero.png`});
+            await page.screenshot({path:`evidence/${name}-hero.png`});
 
             const sig=page.locator('#signature'); await sig.scrollIntoViewIfNeeded(); await page.waitForTimeout(700);
             const canvas=sig.locator('canvas[data-effect="steam"]'); await canvas.waitFor({state:'visible',timeout:10000});
