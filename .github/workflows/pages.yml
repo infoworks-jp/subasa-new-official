@@ -22,17 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Detect complete site assets
-        id: ready
+      - name: Require complete site assets
         run: |
-          if test -s assets/ultimate-miso.webp && test -s assets/tsubasa-ramen.webp && test -s assets/menu-ja.webp && test -s assets/logo-vertical.svg; then echo 'value=true' >> "$GITHUB_OUTPUT"; else echo 'value=false' >> "$GITHUB_OUTPUT"; fi
+          set -euo pipefail
+          for f in index.html style.css app.js assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/susukino-top.webp assets/store-interior.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp assets/logo-vertical.svg; do test -s "$f"; done
       - uses: actions/configure-pages@v5
-        if: steps.ready.outputs.value == 'true'
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
-        if: steps.ready.outputs.value == 'true'
         with:
           path: '.'
       - name: Deploy
-        if: steps.ready.outputs.value == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
