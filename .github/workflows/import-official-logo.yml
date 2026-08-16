@@ -1,0 +1,33 @@
+name: Import approved official logo
+
+on:
+  push:
+    branches: [work]
+
+permissions:
+  contents: write
+
+jobs:
+  import-logo:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download approved official SVG
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL 'https://at.adobe.com/0EYQuaxVaBRcj1Gg' -o /tmp/tsubasa-logo.svg
+          test "$(wc -c < /tmp/tsubasa-logo.svg)" = '119383'
+          test "$(sha256sum /tmp/tsubasa-logo.svg | awk '{print $1}')" = '8929ba1f71ee545614fbfa5f42c428205b715d361e54a9ea56e91206f253feae'
+          cp /tmp/tsubasa-logo.svg assets/tsubasa-logo.svg
+      - name: Commit exact approved SVG
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/tsubasa-logo.svg
+          git diff --cached --quiet && exit 0
+          git commit -m 'Install approved official Tsubasa logo SVG'
+          git push origin HEAD:work
