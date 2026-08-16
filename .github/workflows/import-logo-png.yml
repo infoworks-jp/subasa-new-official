@@ -1,0 +1,24 @@
+name: Import approved PNG logo
+on:
+  push:
+    paths:
+      - '.github/workflows/import-logo-png.yml'
+permissions:
+  contents: write
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download approved logo
+        run: |
+          curl -fL --retry 3 'https://at.adobe.com/Pnt0ugaJxgv5zxNf' -o assets/tsubasa-logo.png
+          file assets/tsubasa-logo.png
+          test "$(stat -c%s assets/tsubasa-logo.png)" -gt 10000
+      - name: Commit asset
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/tsubasa-logo.png
+          git commit -m 'Add approved PNG logo' || exit 0
+          git push
