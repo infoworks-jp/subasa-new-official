@@ -5,6 +5,20 @@ The user's instruction to complete the site remains active until an explicit STO
 
 If execution fails or stalls: detect it, mark ALERT, identify the concrete cause, repair what can be repaired without user input, rerun, and re-check. Do not wait silently for the user to discover the stall.
 
+## Independent watchdog
+Required workflows are monitored by `.github/workflows/watchdog.yml`. Any failed Visual QA or Deploy Pages run must automatically create/update a blocking BUILD ALERT issue. A failed run may never be treated as idle or ignored.
+
+## Preflight rule
+Before relying on an external capability (GitHub Pages enablement, permissions, deployment, browser runtime, assets), verify that capability first. Do not assume it exists because a workflow file was written. If the capability cannot be verified or cannot be changed by the current token, stop that path immediately with a specific actionable ALERT instead of repeatedly retrying the same failing design.
+
+## Fail-closed rule
+Checks are meaningful only if failure blocks completion. Therefore:
+- A QA failure blocks the 70% gate and above.
+- A deployment failure blocks the 100% gate.
+- A checker bug is itself a blocking defect until the checker is repaired and rerun.
+- No statement such as “改善した”, “動いている”, “公開済み”, or “出来た” may be made unless the relevant evidence from the latest commit proves it.
+- A fix is not complete when code is written; it is complete only after the repaired check passes.
+
 ## Definition of “出来た”
 Only 100% qualifies: all specified content implemented, all required images present, public page loads successfully, desktop and mobile visual evidence inspected, links/menu interaction verified, and no blocking defect remains.
 
