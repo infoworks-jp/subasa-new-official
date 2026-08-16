@@ -82,17 +82,21 @@ jobs:
           const report={commit:process.env.GITHUB_SHA,publicUrl:'https://infoworks-jp.github.io/subasa-new-official/',passed:true,cases:{}};
           const targets=[['desktop',1440,1100],['mobile',390,844]];
           const saveCanvas=async(page,selector,path)=>{const data=await page.$eval(selector,c=>c.toDataURL('image/png').split(',')[1]);fs.writeFileSync(path,Buffer.from(data,'base64'));};
-          const saveHero=async(page,path)=>{const r=await page.$eval('#top',e=>{const b=e.getBoundingClientRect();return{x:b.left+scrollX,y:b.top+scrollY,width:b.width,height:b.height}});const cdp=await page.context().newCDPSession(page);const shot=await cdp.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:r.x,y:r.y,width:r.width,height:r.height,scale:1}});fs.writeFileSync(path,Buffer.from(shot.data,'base64'));await cdp.detach();};
           const stats=path=>{const p=PNG.sync.read(fs.readFileSync(path));let active=0,alpha=0,lum=0;for(let i=0;i<p.data.length;i+=4){const a=p.data[i+3];alpha+=a;if(a>8&&(p.data[i]+p.data[i+1]+p.data[i+2])>30)active++;lum+=p.data[i]+p.data[i+1]+p.data[i+2];}return{width:p.width,height:p.height,activePixels:active,alphaSum:alpha,lumaSum:lum};};
           const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));if(A.width!==B.width||A.height!==B.height)return -1;const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.03,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n;};
           for(const [name,width,height] of targets){
-            const page=await browser.newPage({viewport:{width,height}});const errors=[];page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
-            await page.goto(`https://infoworks-jp.github.io/subasa-new-official/?qa=${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'networkidle'});
-            const logo=page.locator('.hero-logo');await logo.waitFor({state:'visible',timeout:10000});const box=await logo.boundingBox();const copy=await page.locator('.hero-copy').boundingBox().catch(()=>null);
+            const errors=[];
+            const staticPage=await browser.newPage({viewport:{width,height}});
+            await staticPage.route('**/effects.js*',r=>r.abort());
+            await staticPage.goto(`https://infoworks-jp.github.io/subasa-new-official/?qa=static-${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'networkidle'});
+            const logo=staticPage.locator('.hero-logo');await logo.waitFor({state:'visible',timeout:10000});const box=await logo.boundingBox();const copy=await staticPage.locator('.hero-copy').boundingBox().catch(()=>null);
             const metrics={x:box.x,y:box.y,width:box.width,height:box.height,xPct:box.x/width,yPct:box.y/height,rightGapPct:(width-(box.x+box.width))/width};
             if(name==='desktop'){if(metrics.xPct<.58||metrics.xPct>.75)errors.push(`desktop-x-out:${metrics.xPct}`);if(metrics.yPct<.06||metrics.yPct>.15)errors.push(`desktop-y-out:${metrics.yPct}`);if(metrics.rightGapPct<.15||metrics.rightGapPct>.25)errors.push(`desktop-right-gap-out:${metrics.rightGapPct}`)}else{if(metrics.xPct<.50||metrics.xPct>.78)errors.push(`mobile-x-out:${metrics.xPct}`);if(metrics.yPct<.05||metrics.yPct>.16)errors.push(`mobile-y-out:${metrics.yPct}`)}
             if(copy){const overlap=!(box.x+box.width<=copy.x||copy.x+copy.width<=box.x||box.y+box.height<=copy.y||copy.y+copy.height<=box.y);if(overlap)errors.push('logo-overlaps-copy')}
-            await page.evaluate(()=>document.querySelectorAll('.fx-canvas').forEach(c=>c.style.visibility='hidden'));await saveHero(page,`evidence/${name}-hero.png`);await page.evaluate(()=>document.querySelectorAll('.fx-canvas').forEach(c=>c.style.visibility='visible'));
+            await staticPage.locator('#top').screenshot({path:`evidence/${name}-hero.png`,animations:'disabled',timeout:15000});await staticPage.close();
+
+            const page=await browser.newPage({viewport:{width,height}});page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            await page.goto(`https://infoworks-jp.github.io/subasa-new-official/?qa=steam-${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'networkidle'});
             const sig=page.locator('#signature');await sig.scrollIntoViewIfNeeded();await page.waitForTimeout(800);const canvas=sig.locator('canvas[data-effect="steam"]');await canvas.waitFor({state:'visible',timeout:10000});const cb=await canvas.boundingBox();
             const state=await page.evaluate(()=>window.__tsubasaEffects||null);if(!state||!state.effects?.includes('steam')||state.canvasCount<1)errors.push('steam-runtime-missing');
             await saveCanvas(page,'#signature canvas[data-effect="steam"]',`evidence/${name}-steam-t0.png`);await page.waitForTimeout(1200);await saveCanvas(page,'#signature canvas[data-effect="steam"]',`evidence/${name}-steam-t1.png`);
