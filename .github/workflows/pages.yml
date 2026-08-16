@@ -16,17 +16,23 @@ concurrency:
 
 jobs:
   deploy:
-    if: ${{ hashFiles('assets/ultimate-miso.webp') != '' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Detect complete site assets
+        id: ready
+        run: |
+          if test -s assets/ultimate-miso.webp && test -s assets/tsubasa-ramen.webp && test -s assets/menu-ja.webp && test -s assets/logo-vertical.svg; then echo 'value=true' >> "$GITHUB_OUTPUT"; else echo 'value=false' >> "$GITHUB_OUTPUT"; fi
       - uses: actions/configure-pages@v5
+        if: steps.ready.outputs.value == 'true'
       - uses: actions/upload-pages-artifact@v3
+        if: steps.ready.outputs.value == 'true'
         with:
           path: '.'
       - name: Deploy
+        if: steps.ready.outputs.value == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
