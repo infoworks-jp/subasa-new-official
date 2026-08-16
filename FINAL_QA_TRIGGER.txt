@@ -1,0 +1,1 @@
+Trigger full Visual QA and Pages deployment after official assets were flattened and localized.
