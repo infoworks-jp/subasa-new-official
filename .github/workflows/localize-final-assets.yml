@@ -1,0 +1,38 @@
+name: Localize final assets
+on:
+  push:
+    paths:
+      - '.github/workflows/localize-final-assets.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  localize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Localize official logo and backgrounds
+        run: |
+          set -euo pipefail
+          curl -fL 'https://raw.githubusercontent.com/infoworks-jp/tsubasa-official-site/main/assets/logo-vertical.svg' -o assets/logo-vertical.svg
+          test -s assets/logo-vertical.svg
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html'); s=p.read_text()
+          s=s.replace('https://raw.githubusercontent.com/infoworks-jp/tsubasa-official-site/main/assets/logo-vertical.svg','assets/logo-vertical.svg')
+          p.write_text(s)
+          p=Path('style.css'); s=p.read_text()
+          s=s.replace('https://raw.githubusercontent.com/infoworks-jp/tsubasa-official-site/main/assets/susukino-top-20260816.png','assets/susukino-top.webp')
+          s=s.replace('https://raw.githubusercontent.com/infoworks-jp/tsubasa-official-site/main/assets/store-interior.png','assets/store-interior.webp')
+          p.write_text(s)
+          PY
+          ! grep -R 'tsubasa-official-site/main/assets' index.html style.css
+          test -s assets/susukino-top.webp
+          test -s assets/store-interior.webp
+      - name: Commit localized official assets
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add assets/logo-vertical.svg index.html style.css
+          git commit -m 'Localize all official site assets' || exit 0
+          git push
