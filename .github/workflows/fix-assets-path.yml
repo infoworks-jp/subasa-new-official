@@ -1,0 +1,35 @@
+name: Fix assets path
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-assets-path.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Flatten nested assets directory
+        run: |
+          set -euo pipefail
+          test -d assets/assets
+          find assets/assets -maxdepth 1 -type f -print
+          cp -f assets/assets/* assets/
+          rm -rf assets/assets
+          test -f assets/ultimate-miso.webp
+          test -f assets/tsubasa-ramen.webp
+          test -f assets/susukino-top.webp
+          test -f assets/store-interior.webp
+          test -f assets/menu-ja.webp
+          test -f assets/menu-en.webp
+          test -f assets/menu-zh.webp
+          test -f assets/menu-ko.webp
+      - name: Commit flattened assets
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A assets
+          git commit -m 'Fix official asset paths' || exit 0
+          git push
