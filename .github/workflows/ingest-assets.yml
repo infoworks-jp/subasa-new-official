@@ -1,0 +1,65 @@
+name: Ingest verified Tsubasa assets
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'assets-pack.zip'
+
+permissions:
+  contents: write
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract asset pack
+        run: |
+          set -euo pipefail
+          rm -rf assets
+          unzip -q assets-pack.zip
+          test -d assets
+      - name: Verify required assets and minimum sizes
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(ultimate-miso.webp tsubasa-ramen.webp chashu.webp butter-corn.webp shio-shoyu.webp negi.webp spicy-negi.webp kimchi.webp fried-rice.webp gyoza.webp menu-ja.webp menu-en.webp menu-zh.webp menu-ko.webp susukino-top.webp store-interior.webp)
+          for name in "${required[@]}"; do
+            test -f "assets/$name" || { echo "MISSING assets/$name"; exit 1; }
+            bytes=$(stat -c%s "assets/$name")
+            test "$bytes" -gt 70000 || { echo "TOO SMALL assets/$name $bytes"; exit 1; }
+          done
+          test $(stat -c%s assets/ultimate-miso.webp) -gt 120000
+          test $(stat -c%s assets/tsubasa-ramen.webp) -gt 150000
+          test $(stat -c%s assets/menu-ja.webp) -gt 200000
+      - name: Verify image dimensions
+        run: |
+          python -m pip install --quiet Pillow
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          minimum = {
+            'ultimate-miso.webp': (1400,900), 'tsubasa-ramen.webp': (1400,900),
+            'menu-ja.webp': (1100,800), 'menu-en.webp': (1100,800),
+            'menu-zh.webp': (1100,800), 'menu-ko.webp': (1100,800),
+            'susukino-top.webp': (1100,1300), 'store-interior.webp': (1500,950),
+          }
+          for p in Path('assets').glob('*.webp'):
+              w,h=Image.open(p).size
+              if p.name in minimum:
+                  mw,mh=minimum[p.name]
+                  assert w>=mw and h>=mh, (p.name,w,h,mw,mh)
+              elif p.name not in {'susukino-top.webp','store-interior.webp'}:
+                  assert w>=1190 and h>=790, (p.name,w,h)
+              print(p.name,w,h,p.stat().st_size)
+          PY
+      - name: Commit verified assets
+        run: |
+          set -euo pipefail
+          rm assets-pack.zip
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets assets-pack.zip
+          git commit -m 'Install verified high-resolution web assets'
+          git push
