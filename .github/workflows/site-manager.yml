@@ -31,8 +31,8 @@ jobs:
           set -euo pipefail
           files='assets/susukino-top.webp assets/tsubasa-logo.svg assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/store-interior.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp'
           for f in $files; do test -s "$f" || { echo "FAIL missing/empty: $f"; exit 1; }; done
-          expected_logo_bytes=573471
-          expected_logo_sha256='df8921210f96cc8d0abbdb8b49f4f34ea72bb8ce7687d5726a6ba1d8e21acac6'
+          expected_logo_bytes=119383
+          expected_logo_sha256='8929ba1f71ee545614fbfa5f42c428205b715d361e54a9ea56e91206f253feae'
           actual_logo_bytes=$(wc -c < assets/tsubasa-logo.svg)
           actual_logo_sha256=$(sha256sum assets/tsubasa-logo.svg | awk '{print $1}')
           test "$actual_logo_bytes" = "$expected_logo_bytes" || { echo "FAIL logo byte mismatch expected=$expected_logo_bytes actual=$actual_logo_bytes"; exit 1; }
