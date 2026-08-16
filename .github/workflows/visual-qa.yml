@@ -17,38 +17,51 @@ jobs:
           cat > /tmp/spec-gate.py <<'PY'
           from pathlib import Path
           import sys
-          errors=[]
-          idx=Path('index.html').read_text()
-          js=Path('fluid-text.js').read_text() if Path('fluid-text.js').exists() else ''
-          required=[
-            ('slide-image', 'data-slide="assets/susukino-top.webp"' in idx),
-            ('fluid-script', '<script src="fluid-text.js"></script>' in idx),
-            ('three-fluid-fx-import', 'three-fluid-fx' in js),
-            ('three-tsl-or-webgpu', ('WebGPURenderer' in js or 'three/tsl' in js or 'tsl' in js.lower())),
-            ('slideshow-texture', ('Slideshow' in js and 'susukino-top.webp' in js)),
-            ('fluid-distortion', ('simpleDistortion' in js or 'fluid.densityNode' in js)),
-            ('pointer-to-fluid', ('pointer' in js.lower() and ('fluid' in js.lower() or 'splat' in js.lower())),
+
+          errors = []
+          idx = Path('index.html').read_text(encoding='utf-8')
+          js_path = Path('fluid-text.js')
+          js = js_path.read_text(encoding='utf-8') if js_path.exists() else ''
+
+          checks = [
+              ('slide-image', 'data-slide="assets/susukino-top.webp"' in idx),
+              ('fluid-script', '<script src="fluid-text.js"></script>' in idx),
+              ('three-fluid-fx-import', 'three-fluid-fx' in js),
+              ('three-tsl-or-webgpu', ('WebGPURenderer' in js or 'three/tsl' in js or 'from \'three/webgpu\'' in js)),
+              ('slideshow-texture', ('Slideshow' in js and 'susukino-top.webp' in js)),
+              ('fluid-distortion', ('simpleDistortion' in js or 'fluid.densityNode' in js)),
+              ('pointer-to-fluid', ('pointer' in js.lower() and ('attachPointerSplats' in js or 'splat' in js.lower()))),
+              ('canvas2d-fake-fluid-forbidden', ("getContext('2d'" not in js and 'getContext("2d"' not in js)),
           ]
-          forbidden=[
-            ('canvas2d-fake-fluid', "getContext('2d'" not in js and 'getContext("2d"' not in js),
-          ]
-          for name,ok in required+forbidden:
-            if not ok: errors.append(name)
+
+          for name, ok in checks:
+              if not ok:
+                  errors.append(name)
+
           if errors:
-            print('SPEC_GATE_FAIL:', ','.join(errors)); sys.exit(1)
+              print('SPEC_GATE_FAIL:' + ','.join(errors))
+              sys.exit(1)
+
           print('SPEC_GATE_PASS')
+          sys.exit(0)
           PY
-      - name: Negative self-test must reject current known-bad implementation
+      - name: Checker must compile
+        run: python3 -m py_compile /tmp/spec-gate.py
+      - name: Negative self-test must reject current known-bad implementation for semantic reasons
         run: |
           set +e
-          python3 /tmp/spec-gate.py
+          output="$(python3 /tmp/spec-gate.py 2>&1)"
           code=$?
           set -e
-          if [ "$code" -eq 0 ]; then
-            echo 'NEGATIVE_SELF_TEST_FAIL: checker accepted known-bad Canvas2D substitute'
+          echo "$output"
+          if [ "$code" -ne 1 ]; then
+            echo "NEGATIVE_SELF_TEST_FAIL: expected checker exit 1, got $code"
             exit 1
           fi
-          echo 'NEGATIVE_SELF_TEST_PASS: checker rejected known-bad implementation as required'
+          echo "$output" | grep -q '^SPEC_GATE_FAIL:' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing semantic SPEC_GATE_FAIL marker'; exit 1; }
+          echo "$output" | grep -q 'three-fluid-fx-import' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing three-fluid-fx violation'; exit 1; }
+          echo "$output" | grep -q 'canvas2d-fake-fluid-forbidden' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing Canvas2D violation'; exit 1; }
+          echo 'NEGATIVE_SELF_TEST_PASS: checker rejected current substitute for the intended reasons'
       - name: Enforce contract on repository
         run: python3 /tmp/spec-gate.py
 
