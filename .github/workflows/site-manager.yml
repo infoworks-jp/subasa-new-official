@@ -1,0 +1,115 @@
+name: Site-wide Manager Gate
+
+on:
+  push:
+    branches: [work, production]
+  pull_request:
+    branches: [production]
+
+permissions:
+  contents: read
+
+jobs:
+  site-manager:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: CONTRACT_PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s SITE-CONTRACT.md
+          grep -q '勝手な簡略化・代替・象徴化・仕様変更を禁止' SITE-CONTRACT.md
+          grep -q 'manager verdict = VERIFIED' SITE-CONTRACT.md
+      - name: ASSET_INTEGRITY_PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          files='assets/susukino-top.webp assets/tsubasa-logo.svg assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/store-interior.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp'
+          for f in $files; do test -s "$f" || { echo "FAIL missing/empty: $f"; exit 1; }; done
+          test "$(wc -c < assets/tsubasa-logo.svg)" -ge 500000 || { echo 'FAIL logo simplified/replaced'; exit 1; }
+          mkdir -p evidence
+          sha256sum $files > evidence/assets.sha256
+      - name: CONTENT_PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '11:00 — 03:00' index.html
+          grep -q '毎週月曜日 定休' index.html
+          grep -q '札幌市中央区南4条西3丁目1-1' index.html
+          grep -q '011-521-5963' index.html
+          grep -q '¥1,100' index.html
+          grep -q '¥2,000' index.html
+          for f in menu-ja.webp menu-en.webp menu-zh.webp menu-ko.webp; do grep -q "$f" index.html; done
+      - name: FLUID_IMPLEMENTATION_PASS
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'three-fluid-fx' fluid-text.js
+          grep -Eq 'WebGPURenderer|three/webgpu|three/tsl' fluid-text.js
+          grep -q 'attachPointerSplats' fluid-text.js
+          grep -q 'simpleDistortion' fluid-text.js
+          grep -q 'fluidOverlay' fluid-text.js
+          grep -q 'tsubasa-logo.svg' fluid-text.js
+          grep -q 'susukino-top.webp' fluid-text.js
+          ! grep -Eq "getContext\\(['\"]2d['\"]" fluid-text.js
+          ! grep -q 'class="wordmark"' index.html
+      - name: Install browser inspector
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Start preview
+        run: |
+          python3 -m http.server 4173 >/tmp/server.log 2>&1 &
+          sleep 2
+      - name: FUNCTION_DESKTOP_MOBILE_INTERACTION_PASS
+        shell: bash
+        run: |
+          cat > /tmp/site-manager.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import {PNG} from 'pngjs';
+          import pixelmatch from 'pixelmatch';
+          fs.mkdirSync('evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const result={commit:process.env.GITHUB_SHA,passed:true,cases:{}};
+          for(const [name,w,h] of [['desktop',1440,1100],['mobile',390,844]]){
+            const page=await browser.newPage({viewport:{width:w,height:h}}); const errors=[]; const badResponses=[];
+            page.on('pageerror',e=>errors.push('pageerror:'+e.message));
+            page.on('response',r=>{if(r.status()>=400) badResponses.push(`${r.status()}:${r.url()}`)});
+            await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'}); await page.waitForTimeout(1800);
+            if(badResponses.length) errors.push(...badResponses);
+            const body=await page.locator('body').evaluate(el=>({sw:el.scrollWidth,cw:el.clientWidth}));
+            if(body.sw>body.cw+2) errors.push(`horizontal-overflow:${body.sw-body.cw}`);
+            for(const sel of ['#top','#signature','#favorites','#shop','#menu','#access']) if(await page.locator(sel).count()!==1) errors.push('missing:'+sel);
+            if(await page.locator('a[href^="tel:"]').count()<1) errors.push('missing-tel');
+            if(await page.locator('a.map').count()<1) errors.push('missing-map');
+            if(await page.locator('[data-menu]').count()<4) errors.push('missing-menu-buttons');
+            const top=page.locator('#top');
+            await top.screenshot({path:`evidence/${name}-before.png`});
+            await page.mouse.move(w*.15,h*.35); await page.mouse.move(w*.85,h*.58,{steps:30}); await page.waitForTimeout(700);
+            await top.screenshot({path:`evidence/${name}-after.png`});
+            const a=PNG.sync.read(fs.readFileSync(`evidence/${name}-before.png`)); const b=PNG.sync.read(fs.readFileSync(`evidence/${name}-after.png`));
+            const d=new PNG({width:a.width,height:a.height}); const changed=pixelmatch(a.data,b.data,d.data,a.width,a.height,{threshold:.1});
+            fs.writeFileSync(`evidence/${name}-diff.png`,PNG.sync.write(d)); const ratio=changed/(a.width*a.height);
+            if(ratio<.0005) errors.push('fluid-not-visibly-reacting:'+ratio);
+            await page.screenshot({path:`evidence/${name}-full.png`,fullPage:true});
+            result.cases[name]={errors,changedPixels:changed,ratio}; if(errors.length) result.passed=false; await page.close();
+          }
+          await browser.close(); fs.writeFileSync('evidence/report.json',JSON.stringify(result,null,2)); if(!result.passed) process.exit(1);
+          JS
+          node /tmp/site-manager.mjs
+      - name: MANAGER_VERDICT
+        run: |
+          printf 'commit=%s\nCONTRACT_PASS=1\nASSET_INTEGRITY_PASS=1\nCONTENT_PASS=1\nFUNCTION_PASS=1\nDESKTOP_VISUAL_PASS=1\nMOBILE_VISUAL_PASS=1\nINTERACTION_PASS=1\nmanager=VERIFIED\n' "$GITHUB_SHA" > evidence/VERDICT.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: site-manager-evidence-${{ github.sha }}
+          path: evidence
+          retention-days: 90
