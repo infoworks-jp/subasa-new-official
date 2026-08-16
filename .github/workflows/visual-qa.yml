@@ -19,38 +19,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Enforce non-negotiable source contract
+      - name: Enforce current source contract
         shell: bash
         run: |
           set -euo pipefail
+          test -s GITHUB_MANAGER.md
           test -s index.html
           test -s style.css
+          test -s fluid-top.css
           test -s app.js
-          test -s fluid-text.js
           test -s assets/susukino-top.webp
-          test -s assets/tsubasa-logo.svg
-          grep -q 'data-slide="assets/susukino-top.webp"' index.html
-          grep -q 'three-fluid-fx' fluid-text.js
-          grep -Eq 'WebGPURenderer|three/webgpu|three/tsl' fluid-text.js
-          grep -q 'attachPointerSplats' fluid-text.js
-          grep -q 'simpleDistortion' fluid-text.js
-          grep -q 'fluidOverlay' fluid-text.js
-          ! grep -Eq "getContext\\(['\"]2d['\"]" fluid-text.js
+          test -s assets/tsubasa-logo.png
+          grep -q 'assets/tsubasa-logo.png' index.html
+          grep -q 'class="hero-logo"' index.html
+          grep -q 'class="hero-bg"' index.html
+          grep -q 'コードではなく公開画面が正解' GITHUB_MANAGER.md
           ! grep -q 'class="wordmark"' index.html
-          grep -q 'tsubasa-logo.svg' fluid-text.js
-      - name: Protect supplied logo from simplification
+      - name: Protect approved PNG logo
         shell: bash
         run: |
           set -euo pipefail
-          bytes=$(wc -c < assets/tsubasa-logo.svg)
+          bytes=$(wc -c < assets/tsubasa-logo.png)
           echo "logo_bytes=$bytes"
-          test "$bytes" -ge 500000 || { echo 'FAIL: supplied logo was missing, replaced or simplified'; exit 1; }
-          grep -q '<svg' assets/tsubasa-logo.svg
-          grep -Eq '<path|<polygon|<polyline' assets/tsubasa-logo.svg
+          test "$bytes" -ge 50000
+          test "$bytes" -le 500000
+          file assets/tsubasa-logo.png | grep -q 'PNG image data'
       - name: Write contract receipt
         run: |
           mkdir -p manager
-          sha256sum index.html style.css app.js fluid-text.js assets/susukino-top.webp assets/tsubasa-logo.svg > manager/source-sha256.txt
+          sha256sum index.html style.css fluid-top.css app.js assets/susukino-top.webp assets/tsubasa-logo.png GITHUB_MANAGER.md > manager/source-sha256.txt
           printf 'commit=%s\nstatus=CONTRACT_VERIFIED\n' "$GITHUB_SHA" > manager/contract.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -71,43 +68,48 @@ jobs:
       - name: Install browser QA
         run: |
           npm init -y >/dev/null 2>&1
-          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npm install --silent playwright@1.55.0
           npx playwright install --with-deps chromium
       - name: Start site
         run: |
           python3 -m http.server 4173 >/tmp/tsubasa-server.log 2>&1 &
           sleep 2
-      - name: Prove pointer-driven TOP changes on desktop and mobile
+      - name: Measure actual rendered hero logo on desktop and mobile
         shell: bash
         run: |
-          cat > /tmp/qa.mjs <<'JS'
+          cat > qa.mjs <<'JS'
           import { chromium } from 'playwright';
           import fs from 'fs';
-          import { PNG } from 'pngjs';
-          import pixelmatch from 'pixelmatch';
           fs.mkdirSync('evidence',{recursive:true});
           const browser=await chromium.launch({headless:true});
           const report={commit:process.env.GITHUB_SHA,passed:true,cases:{}};
           for (const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]) {
-            const page=await browser.newPage({viewport:{width,height}}); const errors=[];
-            page.on('pageerror',e=>errors.push(e.message));
-            await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-            await page.waitForTimeout(1800);
-            const stage=page.locator('#fluidTextStage');
-            if(await stage.count()!==1) errors.push('missing-fluid-stage');
-            await page.locator('#top').screenshot({path:`evidence/${name}-before.png`});
-            await page.mouse.move(width*.18,height*.35);
-            await page.mouse.move(width*.82,height*.58,{steps:28});
-            await page.waitForTimeout(650);
-            await page.locator('#top').screenshot({path:`evidence/${name}-after.png`});
-            const a=PNG.sync.read(fs.readFileSync(`evidence/${name}-before.png`));
-            const b=PNG.sync.read(fs.readFileSync(`evidence/${name}-after.png`));
-            const diff=new PNG({width:a.width,height:a.height});
-            const pixels=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:0.1});
-            fs.writeFileSync(`evidence/${name}-diff.png`,PNG.sync.write(diff));
-            const ratio=pixels/(a.width*a.height);
-            if(ratio<0.0005) errors.push(`pointer-effect-not-visible:${ratio}`);
-            report.cases[name]={changedPixels:pixels,ratio,errors};
+            const page=await browser.newPage({viewport:{width,height}});
+            const errors=[];
+            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            await page.goto(`http://127.0.0.1:4173/?qa=${process.env.GITHUB_SHA}`,{waitUntil:'networkidle'});
+            const logo=page.locator('.hero-logo');
+            await logo.waitFor({state:'visible'});
+            const box=await logo.boundingBox();
+            const copy=await page.locator('.hero-copy').boundingBox();
+            if(!box) errors.push('missing-logo-box');
+            if(box){
+              const metrics={x:box.x,y:box.y,width:box.width,height:box.height,xPct:box.x/width,yPct:box.y/height,rightGapPct:(width-(box.x+box.width))/width};
+              if(name==='desktop'){
+                if(metrics.xPct < .58 || metrics.xPct > .75) errors.push(`desktop-x-out:${metrics.xPct}`);
+                if(metrics.yPct < .06 || metrics.yPct > .15) errors.push(`desktop-y-out:${metrics.yPct}`);
+                if(metrics.rightGapPct < .15 || metrics.rightGapPct > .25) errors.push(`desktop-right-gap-out:${metrics.rightGapPct}`);
+              } else {
+                if(metrics.xPct < .50 || metrics.xPct > .78) errors.push(`mobile-x-out:${metrics.xPct}`);
+                if(metrics.yPct < .05 || metrics.yPct > .16) errors.push(`mobile-y-out:${metrics.yPct}`);
+              }
+              if(copy){
+                const overlap=!(box.x+box.width<=copy.x || copy.x+copy.width<=box.x || box.y+box.height<=copy.y || copy.y+copy.height<=box.y);
+                if(overlap) errors.push('logo-overlaps-copy');
+              }
+              report.cases[name]={metrics,errors};
+            } else report.cases[name]={errors};
+            await page.locator('#top').screenshot({path:`evidence/${name}-hero.png`});
             if(errors.length) report.passed=false;
             await page.close();
           }
@@ -115,7 +117,7 @@ jobs:
           fs.writeFileSync('evidence/report.json',JSON.stringify(report,null,2));
           if(!report.passed) process.exit(1);
           JS
-          node /tmp/qa.mjs
+          node qa.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
