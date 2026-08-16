@@ -1,0 +1,46 @@
+name: Build Watchdog
+
+on:
+  workflow_run:
+    workflows: ["Visual QA", "Deploy Pages"]
+    types: [completed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  alert:
+    if: ${{ github.event.workflow_run.conclusion != 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update BUILD ALERT
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_NAME: ${{ github.event.workflow_run.name }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          title="BUILD ALERT: ${RUN_NAME} failed"
+          body=$(cat <<EOF
+          Automatic watchdog detected a failed/stopped required workflow.
+
+          - Workflow: ${RUN_NAME}
+          - Conclusion: ${CONCLUSION}
+          - Run: ${RUN_URL}
+          - Run ID: ${RUN_ID}
+          - Commit: ${SHA}
+
+          This is a blocking defect. Do not report the site as complete until the failure is diagnosed, repaired, rerun, and verified.
+          EOF
+          )
+          existing=$(gh issue list --repo "$REPO" --state open --search "$title in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$REPO" --body "$body"
+          else
+            gh issue create --repo "$REPO" --title "$title" --body "$body"
+          fi
