@@ -33,7 +33,7 @@ jobs:
       - name: Install Playwright
         run: |
           npm init -y >/dev/null 2>&1
-          npm install --silent playwright@1.55.0
+          npm install --silent playwright@1.55.0 pngjs@7.0.0
           npx playwright install --with-deps chromium
       - name: Start preview
         run: |
@@ -44,11 +44,13 @@ jobs:
           cat > qa.mjs <<'JS'
           import { chromium } from 'playwright';
           import fs from 'fs';
+          import { PNG } from 'pngjs';
           fs.mkdirSync('qa',{recursive:true});
           const browser=await chromium.launch({headless:true});
           const cases=[['desktop',1440,1100],['mobile',390,844]];
           const expectedMenus=['assets/menu-ja.webp','assets/menu-en.webp','assets/menu-zh.webp','assets/menu-ko.webp'];
           const report={passed:true,cases:{}};
+          function diffPixels(a,b){const A=PNG.sync.read(a),B=PNG.sync.read(b);let changed=0,total=A.width*A.height;for(let i=0;i<A.data.length;i+=4){const d=Math.abs(A.data[i]-B.data[i])+Math.abs(A.data[i+1]-B.data[i+1])+Math.abs(A.data[i+2]-B.data[i+2]);if(d>18)changed++;}return changed/total;}
           for(const [name,width,height] of cases){
             const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
             const bad=[];
@@ -56,23 +58,29 @@ jobs:
             page.on('pageerror',e=>bad.push('pageerror:'+e.message));
             page.on('response',r=>{if(r.status()>=400) bad.push(`http:${r.status()}:${r.url()}`)});
             await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-            await page.waitForTimeout(4600);
+            await page.waitForTimeout(1600);
+            await page.waitForFunction(()=>window.__tsubasaFluid?.frame>15);
+            const before=await page.locator('#top').screenshot();
+            for(let i=0;i<10;i++) await page.mouse.move(width*(.18+i*.06),height*(.35+Math.sin(i)*.12),{steps:3});
+            await page.waitForTimeout(700);
+            const after=await page.locator('#top').screenshot();
+            const fluidDiff=diffPixels(before,after);
+            if(fluidDiff<0.003) bad.push('fluid-not-visibly-changing:'+fluidDiff.toFixed(5));
             const data=await page.evaluate(()=>({
-              title:document.title,
-              text:document.body.innerText,
+              title:document.title,text:document.body.innerText,
               imgs:[...document.images].filter(i=>i.getAttribute('src')).map(i=>({src:i.getAttribute('src'),w:i.naturalWidth,h:i.naturalHeight,complete:i.complete})),
               logoOpacity:getComputedStyle(document.querySelector('.vertical-logo')).opacity,
               heroBg:getComputedStyle(document.querySelector('.hero-photo')).backgroundImage,
               shopBg:getComputedStyle(document.querySelector('.shop-photo')).backgroundImage,
               canvas:{w:document.querySelector('#ink').width,h:document.querySelector('#ink').height,webgl2:!!document.querySelector('#ink').getContext('webgl2')},
-              scrollHeight:document.documentElement.scrollHeight
+              fluid:window.__tsubasaFluid||null,scrollHeight:document.documentElement.scrollHeight
             }));
             for(const i of data.imgs) if(!i.complete||i.w===0||i.h===0) bad.push('broken:'+i.src);
             for(const s of ['究極の','つばさ','11:00','月曜日']) if(!data.text.includes(s)) bad.push('missing-text:'+s);
             if(Number(data.logoOpacity)<0.9) bad.push('logo-not-visible:'+data.logoOpacity);
             if(!data.heroBg.includes('susukino-top.webp')) bad.push('hero-background');
             if(!data.shopBg.includes('store-interior.webp')) bad.push('shop-background');
-            if(!data.canvas.webgl2||data.canvas.w<300||data.canvas.h<300) bad.push('fluid-webgl-not-running');
+            if(!data.canvas.webgl2||!data.fluid||data.fluid.frame<15) bad.push('fluid-webgl-not-running');
             await page.screenshot({path:`qa/${name}-full.png`,fullPage:true});
             await page.locator('#top').screenshot({path:`qa/${name}-top.png`});
             await page.locator('#signature').screenshot({path:`qa/${name}-miso.png`});
@@ -80,27 +88,18 @@ jobs:
             await page.locator('#menu').scrollIntoViewIfNeeded();
             const buttons=page.locator('[data-menu]');
             if(await buttons.count()!==4) bad.push('menu-buttons');
-            else {
-              for(let i=0;i<4;i++){
-                const expected=expectedMenus[i];
-                if(await buttons.nth(i).getAttribute('data-menu')!==expected) bad.push('menu-target:'+i);
-                await buttons.nth(i).click();
-                await page.locator('#menuDialog').waitFor({state:'visible'});
-                await page.waitForFunction(()=>{const im=document.querySelector('#menuImage');return !!im?.getAttribute('src')&&im.complete&&im.naturalWidth>0&&im.naturalHeight>0});
-                const menu=await page.locator('#menuImage').evaluate(img=>({src:img.getAttribute('src'),w:img.naturalWidth,h:img.naturalHeight,complete:img.complete}));
-                if(menu.src!==expected) bad.push('wrong-menu:'+menu.src);
-                if(!menu.complete||menu.w===0||menu.h===0) bad.push('broken-menu:'+menu.src);
-                await page.locator('.close').click();
-              }
+            else for(let i=0;i<4;i++){
+              const expected=expectedMenus[i];
+              if(await buttons.nth(i).getAttribute('data-menu')!==expected) bad.push('menu-target:'+i);
+              await buttons.nth(i).click();await page.locator('#menuDialog').waitFor({state:'visible'});
+              await page.waitForFunction(()=>{const im=document.querySelector('#menuImage');return !!im?.getAttribute('src')&&im.complete&&im.naturalWidth>0&&im.naturalHeight>0});
+              const menu=await page.locator('#menuImage').evaluate(img=>({src:img.getAttribute('src'),w:img.naturalWidth,h:img.naturalHeight,complete:img.complete}));
+              if(menu.src!==expected) bad.push('wrong-menu:'+menu.src);if(!menu.complete||menu.w===0||menu.h===0) bad.push('broken-menu:'+menu.src);await page.locator('.close').click();
             }
-            report.cases[name]={bad,images:data.imgs.length,logoOpacity:data.logoOpacity,heroBg:data.heroBg,shopBg:data.shopBg,canvas:data.canvas,scrollHeight:data.scrollHeight};
-            if(bad.length) report.passed=false;
-            await page.close();
+            report.cases[name]={bad,fluidDiff,images:data.imgs.length,logoOpacity:data.logoOpacity,heroBg:data.heroBg,shopBg:data.shopBg,canvas:data.canvas,fluid:data.fluid,scrollHeight:data.scrollHeight};
+            if(bad.length) report.passed=false;await page.close();
           }
-          await browser.close();
-          fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2));
-          console.log(JSON.stringify(report,null,2));
-          if(!report.passed) process.exit(1);
+          await browser.close();fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));if(!report.passed)process.exit(1);
           JS
           node qa.mjs
       - uses: actions/upload-artifact@v4
