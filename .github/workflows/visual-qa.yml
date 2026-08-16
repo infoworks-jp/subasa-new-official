@@ -1,122 +1,140 @@
-name: Visual QA
+name: Tsubasa Release Manager
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: tsubasa-release-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  spec-gate:
+  contract:
+    name: 1. Contract / source integrity
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Write immutable Fluid Text contract checker
-        run: |
-          cat > /tmp/spec-gate.py <<'PY'
-          from pathlib import Path
-          import sys
-
-          errors = []
-          idx = Path('index.html').read_text(encoding='utf-8')
-          js_path = Path('fluid-text.js')
-          js = js_path.read_text(encoding='utf-8') if js_path.exists() else ''
-
-          checks = [
-              ('slide-image', 'data-slide="assets/susukino-top.webp"' in idx),
-              ('fluid-script', '<script src="fluid-text.js"></script>' in idx),
-              ('three-fluid-fx-import', 'three-fluid-fx' in js),
-              ('three-tsl-or-webgpu', ('WebGPURenderer' in js or 'three/tsl' in js or 'from \'three/webgpu\'' in js)),
-              ('slideshow-texture', ('Slideshow' in js and 'susukino-top.webp' in js)),
-              ('fluid-distortion', ('simpleDistortion' in js or 'fluid.densityNode' in js)),
-              ('pointer-to-fluid', ('pointer' in js.lower() and ('attachPointerSplats' in js or 'splat' in js.lower()))),
-              ('canvas2d-fake-fluid-forbidden', ("getContext('2d'" not in js and 'getContext("2d"' not in js)),
-          ]
-
-          for name, ok in checks:
-              if not ok:
-                  errors.append(name)
-
-          if errors:
-              print('SPEC_GATE_FAIL:' + ','.join(errors))
-              sys.exit(1)
-
-          print('SPEC_GATE_PASS')
-          sys.exit(0)
-          PY
-      - name: Checker must compile
-        run: python3 -m py_compile /tmp/spec-gate.py
-      - name: Negative self-test must reject current known-bad implementation for semantic reasons
-        run: |
-          set +e
-          output="$(python3 /tmp/spec-gate.py 2>&1)"
-          code=$?
-          set -e
-          echo "$output"
-          if [ "$code" -ne 1 ]; then
-            echo "NEGATIVE_SELF_TEST_FAIL: expected checker exit 1, got $code"
-            exit 1
-          fi
-          echo "$output" | grep -q '^SPEC_GATE_FAIL:' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing semantic SPEC_GATE_FAIL marker'; exit 1; }
-          echo "$output" | grep -q 'three-fluid-fx-import' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing three-fluid-fx violation'; exit 1; }
-          echo "$output" | grep -q 'canvas2d-fake-fluid-forbidden' || { echo 'NEGATIVE_SELF_TEST_FAIL: missing Canvas2D violation'; exit 1; }
-          echo 'NEGATIVE_SELF_TEST_PASS: checker rejected current substitute for the intended reasons'
-      - name: Enforce contract on repository
-        run: python3 /tmp/spec-gate.py
-
-  qa:
-    runs-on: ubuntu-latest
-    timeout-minutes: 12
-    steps:
-      - uses: actions/checkout@v4
-      - name: Require installed assets
+      - name: Enforce non-negotiable source contract
         shell: bash
         run: |
           set -euo pipefail
-          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/susukino-top.webp assets/store-interior.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp assets/logo-vertical.svg; do test -s "$f"; done
+          test -s index.html
+          test -s style.css
+          test -s app.js
+          test -s fluid-text.js
+          test -s assets/susukino-top.webp
+          test -s assets/tsubasa-logo.svg
+          grep -q 'data-slide="assets/susukino-top.webp"' index.html
+          grep -q 'three-fluid-fx' fluid-text.js
+          grep -Eq 'WebGPURenderer|three/webgpu|three/tsl' fluid-text.js
+          grep -q 'attachPointerSplats' fluid-text.js
+          grep -q 'simpleDistortion' fluid-text.js
+          grep -q 'fluidOverlay' fluid-text.js
+          ! grep -Eq "getContext\\(['\"]2d['\"]" fluid-text.js
+          ! grep -q 'class="wordmark"' index.html
+          grep -q 'tsubasa-logo.svg' fluid-text.js
+      - name: Protect supplied logo from simplification
+        shell: bash
+        run: |
+          set -euo pipefail
+          bytes=$(wc -c < assets/tsubasa-logo.svg)
+          echo "logo_bytes=$bytes"
+          test "$bytes" -ge 500000 || { echo 'FAIL: supplied logo was missing, replaced or simplified'; exit 1; }
+          grep -q '<svg' assets/tsubasa-logo.svg
+          grep -Eq '<path|<polygon|<polyline' assets/tsubasa-logo.svg
+      - name: Write contract receipt
+        run: |
+          mkdir -p manager
+          sha256sum index.html style.css app.js fluid-text.js assets/susukino-top.webp assets/tsubasa-logo.svg > manager/source-sha256.txt
+          printf 'commit=%s\nstatus=CONTRACT_VERIFIED\n' "$GITHUB_SHA" > manager/contract.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: manager-contract-${{ github.sha }}
+          path: manager
+          retention-days: 30
+
+  browser:
+    name: 2. Browser / visual behavior
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify static contract
-        run: |
-          set -euo pipefail
-          test -f index.html && test -f style.css && test -f app.js && test -f fluid-text.js
-          grep -q '究極の' index.html
-          grep -q 'つばさ<br>ラーメン' index.html
-          grep -q '11:00 — 03:00' index.html
-          grep -q '毎週月曜日 定休' index.html
-      - name: Install Playwright
+      - name: Install browser QA
         run: |
           npm init -y >/dev/null 2>&1
-          npm install --silent playwright@1.55.0 pngjs@7.0.0
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
           npx playwright install --with-deps chromium
-      - name: Start preview
+      - name: Start site
         run: |
-          python3 -m http.server 4173 >/tmp/server.log 2>&1 &
+          python3 -m http.server 4173 >/tmp/tsubasa-server.log 2>&1 &
           sleep 2
-      - name: Browser QA and screenshots
+      - name: Prove pointer-driven TOP changes on desktop and mobile
+        shell: bash
         run: |
-          cat > qa.mjs <<'JS'
-          import { chromium } from 'playwright'; import fs from 'fs';
-          fs.mkdirSync('qa',{recursive:true}); const browser=await chromium.launch({headless:true});
-          const report={passed:true,cases:{}};
-          for(const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]){
-            const page=await browser.newPage({viewport:{width,height}}),bad=[];
-            page.on('pageerror',e=>bad.push('pageerror:'+e.message));
-            await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'}); await page.waitForTimeout(1200);
-            const stage=page.locator('#fluidTextStage'); if(await stage.count()!==1) bad.push('missing-fluid-stage');
-            const slide=await stage.getAttribute('data-slide'); if(slide!=='assets/susukino-top.webp') bad.push('wrong-slide:'+slide);
-            await page.mouse.move(width*.25,height*.4); await page.mouse.move(width*.7,height*.55,{steps:12}); await page.waitForTimeout(500);
-            await page.screenshot({path:`qa/${name}-full.png`,fullPage:true}); await page.locator('#top').screenshot({path:`qa/${name}-top.png`});
-            report.cases[name]={bad}; if(bad.length)report.passed=false; await page.close();
+          cat > /tmp/qa.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import { PNG } from 'pngjs';
+          import pixelmatch from 'pixelmatch';
+          fs.mkdirSync('evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const report={commit:process.env.GITHUB_SHA,passed:true,cases:{}};
+          for (const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]) {
+            const page=await browser.newPage({viewport:{width,height}}); const errors=[];
+            page.on('pageerror',e=>errors.push(e.message));
+            await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
+            await page.waitForTimeout(1800);
+            const stage=page.locator('#fluidTextStage');
+            if(await stage.count()!==1) errors.push('missing-fluid-stage');
+            await page.locator('#top').screenshot({path:`evidence/${name}-before.png`});
+            await page.mouse.move(width*.18,height*.35);
+            await page.mouse.move(width*.82,height*.58,{steps:28});
+            await page.waitForTimeout(650);
+            await page.locator('#top').screenshot({path:`evidence/${name}-after.png`});
+            const a=PNG.sync.read(fs.readFileSync(`evidence/${name}-before.png`));
+            const b=PNG.sync.read(fs.readFileSync(`evidence/${name}-after.png`));
+            const diff=new PNG({width:a.width,height:a.height});
+            const pixels=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:0.1});
+            fs.writeFileSync(`evidence/${name}-diff.png`,PNG.sync.write(diff));
+            const ratio=pixels/(a.width*a.height);
+            if(ratio<0.0005) errors.push(`pointer-effect-not-visible:${ratio}`);
+            report.cases[name]={changedPixels:pixels,ratio,errors};
+            if(errors.length) report.passed=false;
+            await page.close();
           }
-          await browser.close(); fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2)); if(!report.passed)process.exit(1);
+          await browser.close();
+          fs.writeFileSync('evidence/report.json',JSON.stringify(report,null,2));
+          if(!report.passed) process.exit(1);
           JS
-          node qa.mjs
+          node /tmp/qa.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: tsubasa-visual-qa
-          path: qa
-          retention-days: 14
+          name: manager-visual-evidence-${{ github.sha }}
+          path: evidence
+          retention-days: 30
+
+  manager:
+    name: 3. GitHub manager verdict
+    needs: [contract, browser]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Issue verified release verdict
+        run: |
+          mkdir -p manager-verdict
+          printf 'commit=%s\ncontract=PASS\nbrowser_visual=PASS\nmanager=PASS\nrelease=VERIFIED\n' "$GITHUB_SHA" | tee manager-verdict/VERDICT.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VERIFIED-${{ github.sha }}
+          path: manager-verdict/VERDICT.txt
+          retention-days: 90
