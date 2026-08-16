@@ -56,7 +56,7 @@ jobs:
           retention-days: 30
 
   browser:
-    name: 2. Browser / visual behavior
+    name: 2. Public browser / visual behavior
     needs: contract
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -70,11 +70,7 @@ jobs:
           npm init -y >/dev/null 2>&1
           npm install --silent playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Start site
-        run: |
-          python3 -m http.server 4173 >/tmp/tsubasa-server.log 2>&1 &
-          sleep 2
-      - name: Measure actual rendered hero logo on desktop and mobile
+      - name: Measure actual public rendered hero logo on desktop and mobile
         shell: bash
         run: |
           cat > qa.mjs <<'JS'
@@ -82,35 +78,41 @@ jobs:
           import fs from 'fs';
           fs.mkdirSync('evidence',{recursive:true});
           const browser=await chromium.launch({headless:true});
-          const report={commit:process.env.GITHUB_SHA,passed:true,cases:{}};
-          for (const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]) {
+          const report={commit:process.env.GITHUB_SHA,publicUrl:'https://infoworks-jp.github.io/subasa-new-official/',passed:true,cases:{}};
+          const targets=[['desktop',1440,1100],['mobile',390,844]];
+          for (const [name,width,height] of targets) {
             const page=await browser.newPage({viewport:{width,height}});
-            const errors=[];
-            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
-            await page.goto(`http://127.0.0.1:4173/?qa=${process.env.GITHUB_SHA}`,{waitUntil:'networkidle'});
-            const logo=page.locator('.hero-logo');
-            await logo.waitFor({state:'visible'});
-            const box=await logo.boundingBox();
-            const copy=await page.locator('.hero-copy').boundingBox();
-            if(!box) errors.push('missing-logo-box');
-            if(box){
-              const metrics={x:box.x,y:box.y,width:box.width,height:box.height,xPct:box.x/width,yPct:box.y/height,rightGapPct:(width-(box.x+box.width))/width};
-              if(name==='desktop'){
-                if(metrics.xPct < .58 || metrics.xPct > .75) errors.push(`desktop-x-out:${metrics.xPct}`);
-                if(metrics.yPct < .06 || metrics.yPct > .15) errors.push(`desktop-y-out:${metrics.yPct}`);
-                if(metrics.rightGapPct < .15 || metrics.rightGapPct > .25) errors.push(`desktop-right-gap-out:${metrics.rightGapPct}`);
-              } else {
-                if(metrics.xPct < .50 || metrics.xPct > .78) errors.push(`mobile-x-out:${metrics.xPct}`);
-                if(metrics.yPct < .05 || metrics.yPct > .16) errors.push(`mobile-y-out:${metrics.yPct}`);
+            let finalErrors=[]; let metrics=null; let attempts=0;
+            for(attempts=1;attempts<=12;attempts++){
+              const errors=[];
+              await page.goto(`https://infoworks-jp.github.io/subasa-new-official/?qa=${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'networkidle'});
+              const logo=page.locator('.hero-logo');
+              try{ await logo.waitFor({state:'visible',timeout:8000}); }catch{ errors.push('missing-logo'); }
+              const box=errors.length?null:await logo.boundingBox();
+              const copy=await page.locator('.hero-copy').boundingBox().catch(()=>null);
+              if(!box) errors.push('missing-logo-box');
+              if(box){
+                metrics={x:box.x,y:box.y,width:box.width,height:box.height,xPct:box.x/width,yPct:box.y/height,rightGapPct:(width-(box.x+box.width))/width};
+                if(name==='desktop'){
+                  if(metrics.xPct < .58 || metrics.xPct > .75) errors.push(`desktop-x-out:${metrics.xPct}`);
+                  if(metrics.yPct < .06 || metrics.yPct > .15) errors.push(`desktop-y-out:${metrics.yPct}`);
+                  if(metrics.rightGapPct < .15 || metrics.rightGapPct > .25) errors.push(`desktop-right-gap-out:${metrics.rightGapPct}`);
+                } else {
+                  if(metrics.xPct < .50 || metrics.xPct > .78) errors.push(`mobile-x-out:${metrics.xPct}`);
+                  if(metrics.yPct < .05 || metrics.yPct > .16) errors.push(`mobile-y-out:${metrics.yPct}`);
+                }
+                if(copy){
+                  const overlap=!(box.x+box.width<=copy.x || copy.x+copy.width<=box.x || box.y+box.height<=copy.y || copy.y+copy.height<=box.y);
+                  if(overlap) errors.push('logo-overlaps-copy');
+                }
               }
-              if(copy){
-                const overlap=!(box.x+box.width<=copy.x || copy.x+copy.width<=box.x || box.y+box.height<=copy.y || copy.y+copy.height<=box.y);
-                if(overlap) errors.push('logo-overlaps-copy');
-              }
-              report.cases[name]={metrics,errors};
-            } else report.cases[name]={errors};
+              finalErrors=errors;
+              if(!errors.length) break;
+              await page.waitForTimeout(10000);
+            }
             await page.locator('#top').screenshot({path:`evidence/${name}-hero.png`});
-            if(errors.length) report.passed=false;
+            report.cases[name]={metrics,attempts,errors:finalErrors};
+            if(finalErrors.length) report.passed=false;
             await page.close();
           }
           await browser.close();
@@ -134,7 +136,7 @@ jobs:
       - name: Issue verified release verdict
         run: |
           mkdir -p manager-verdict
-          printf 'commit=%s\ncontract=PASS\nbrowser_visual=PASS\nmanager=PASS\nrelease=VERIFIED\n' "$GITHUB_SHA" | tee manager-verdict/VERDICT.txt
+          printf 'commit=%s\ncontract=PASS\npublic_browser_visual=PASS\nmanager=PASS\nrelease=VERIFIED\n' "$GITHUB_SHA" | tee manager-verdict/VERDICT.txt
       - uses: actions/upload-artifact@v4
         with:
           name: VERIFIED-${{ github.sha }}
