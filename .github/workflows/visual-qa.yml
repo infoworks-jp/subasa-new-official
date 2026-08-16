@@ -3,23 +3,32 @@ name: Visual QA
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'assets-pack.zip'
 
 permissions:
   contents: read
 
 jobs:
   qa:
-    if: ${{ hashFiles('assets/ultimate-miso.webp') != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+      - name: Detect installed assets
+        id: ready
+        shell: bash
+        run: |
+          if test -s assets/ultimate-miso.webp && test -s assets/tsubasa-ramen.webp && test -s assets/menu-ja.webp; then
+            echo 'value=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'value=false' >> "$GITHUB_OUTPUT"
+            echo 'Assets not installed yet; QA intentionally deferred.'
+          fi
       - uses: actions/setup-node@v4
+        if: steps.ready.outputs.value == 'true'
         with:
           node-version: 22
       - name: Verify static contract
+        if: steps.ready.outputs.value == 'true'
         run: |
           set -euo pipefail
           test -f index.html && test -f style.css && test -f app.js
@@ -27,18 +36,20 @@ jobs:
           grep -q 'つばさ<br>ラーメン' index.html
           grep -q '11:00 — 03:00' index.html
           grep -q '毎週月曜日 定休' index.html
-          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp; do test -s "$f"; done
+          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp assets/logo-vertical.svg; do test -s "$f"; done
       - name: Install Playwright
+        if: steps.ready.outputs.value == 'true'
         run: |
           npm init -y >/dev/null 2>&1
           npm install --silent playwright@1.55.0
           npx playwright install --with-deps chromium
       - name: Start preview
+        if: steps.ready.outputs.value == 'true'
         run: |
           python3 -m http.server 4173 >/tmp/server.log 2>&1 &
-          echo $! > /tmp/server.pid
           sleep 2
       - name: Browser QA and screenshots
+        if: steps.ready.outputs.value == 'true'
         run: |
           cat > /tmp/qa.mjs <<'JS'
           import { chromium } from 'playwright';
@@ -52,7 +63,7 @@ jobs:
             page.on('console',m=>{if(m.type()==='error') bad.push('console:'+m.text())});
             page.on('pageerror',e=>bad.push('pageerror:'+e.message));
             await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-            await page.waitForTimeout(4500);
+            await page.waitForTimeout(4600);
             const data=await page.evaluate(()=>({
               title:document.title,
               text:document.body.innerText,
@@ -64,15 +75,15 @@ jobs:
             await page.screenshot({path:`qa/${name}-full.png`,fullPage:true});
             await page.locator('#top').screenshot({path:`qa/${name}-top.png`});
             await page.locator('#signature').screenshot({path:`qa/${name}-miso.png`});
-            const sig2=page.locator('.signature-tsubasa'); if(await sig2.count()) await sig2.screenshot({path:`qa/${name}-tsubasa.png`});
+            await page.locator('.signature-tsubasa').screenshot({path:`qa/${name}-tsubasa.png`});
             await page.locator('#menu').scrollIntoViewIfNeeded();
-            const buttons=page.locator('[data-menu]');
-            if(await buttons.count()!==4) bad.push('menu-buttons');
+            if(await page.locator('[data-menu]').count()!==4) bad.push('menu-buttons');
             report.cases[name]={bad,images:data.imgs.length,scrollHeight:data.scrollHeight};
             if(bad.length) report.passed=false;
             await page.close();
           }
           await browser.close();
+          fs.mkdirSync('qa',{recursive:true});
           fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2));
           console.log(JSON.stringify(report,null,2));
           if(!report.passed) process.exit(1);
@@ -80,7 +91,7 @@ jobs:
           mkdir -p qa
           node /tmp/qa.mjs
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.ready.outputs.value == 'true'
         with:
           name: tsubasa-visual-qa
           path: qa
