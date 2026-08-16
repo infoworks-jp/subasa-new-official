@@ -1,37 +1,32 @@
 (()=>{
-const nodes=[...document.querySelectorAll('.fx-canvas[data-effect="steam"]')];
-if(!nodes.length)return;
-const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
-const fine=matchMedia('(hover:hover) and (pointer:fine)').matches;
-const sims=[];
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-function make(c){
- const ctx=c.getContext('2d',{alpha:true,desynchronized:true});
- const s={c,ctx,w:0,h:0,gw:0,gh:0,d:null,n:null,vx:null,vy:null,nvx:null,nvy:null,last:0,acc:0,profile:c.dataset.profile,visible:false,pointer:null};
- resize(s); sims.push(s); return s;
-}
-function resize(s){
- const r=s.c.getBoundingClientRect(); s.w=Math.max(1,r.width); s.h=Math.max(1,r.height);
- const mobile=s.w<700, long=Math.min(mobile?84:128,Math.max(64,Math.round(s.w/12)));
- s.gw=long; s.gh=Math.max(48,Math.round(long*s.h/s.w)); const N=s.gw*s.gh;
- s.d=new Float32Array(N);s.n=new Float32Array(N);s.vx=new Float32Array(N);s.vy=new Float32Array(N);s.nvx=new Float32Array(N);s.nvy=new Float32Array(N);
- s.c.width=s.gw;s.c.height=s.gh; s.ctx.imageSmoothingEnabled=true;
-}
-function source(s){const t=s.profile==='tsubasa'?{x:.54,y:.55}:{x:.56,y:.53};return{x:t.x*s.gw,y:t.y*s.gh}}
-function addSteam(s,t){
- const o=source(s), pulse=.55+.45*Math.sin(t*.0017);
- for(let j=-2;j<=2;j++)for(let i=-3;i<=3;i++){const x=Math.round(o.x+i),y=Math.round(o.y+j);if(x<1||x>=s.gw-1||y<1||y>=s.gh-1)continue;const k=y*s.gw+x,r=Math.exp(-(i*i+j*j)/7);s.d[k]=clamp(s.d[k]+r*(.045+.025*pulse),0,1);s.vy[k]-=.018*r;s.vx[k]+=Math.sin(t*.001+i)*.004*r;}
-}
-function splat(s,p){if(!p)return;const cx=p.x*s.gw,cy=p.y*s.gh;for(let j=-4;j<=4;j++)for(let i=-4;i<=4;i++){const x=Math.round(cx+i),y=Math.round(cy+j);if(x<1||x>=s.gw-1||y<1||y>=s.gh-1)continue;const k=y*s.gw+x,r=Math.exp(-(i*i+j*j)/12);s.vx[k]+=p.dx*.006*r;s.vy[k]+=p.dy*.006*r;s.d[k]=clamp(s.d[k]+.035*r,0,1)}s.pointer=null}
-function step(s,t){
- const W=s.gw,H=s.gh;addSteam(s,t);splat(s,s.pointer);
- for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){const k=y*W+x;const ax=clamp(x-s.vx[k]*7,1,W-2),ay=clamp(y-s.vy[k]*7,1,H-2),x0=ax|0,y0=ay|0,fx=ax-x0,fy=ay-y0,k00=y0*W+x0,k10=k00+1,k01=k00+W,k11=k01+1;const sample=(a)=>a[k00]*(1-fx)*(1-fy)+a[k10]*fx*(1-fy)+a[k01]*(1-fx)*fy+a[k11]*fx*fy;s.n[k]=sample(s.d)*.986;s.nvx[k]=sample(s.vx)*.965+(Math.sin(y*.31+t*.0007)*.0007);s.nvy[k]=sample(s.vy)*.965-.0014;}
- [s.d,s.n]=[s.n,s.d];[s.vx,s.nvx]=[s.nvx,s.vx];[s.vy,s.nvy]=[s.nvy,s.vy];
-}
-function draw(s){const W=s.gw,H=s.gh,img=s.ctx.createImageData(W,H),a=img.data;for(let k=0;k<W*H;k++){const q=clamp(s.d[k],0,1),alpha=Math.round(150*Math.pow(q,.72));a[k*4]=242;a[k*4+1]=246;a[k*4+2]=248;a[k*4+3]=alpha}s.ctx.putImageData(img,0,0)}
-for(const c of nodes){const s=make(c);c.style.display='block';c.style.pointerEvents='none';const io=new IntersectionObserver(e=>{s.visible=e[0].isIntersecting},{rootMargin:'150px'});io.observe(c);if(fine){const host=c.parentElement;let last=null;host.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;if(x<0||x>1||y<0||y>1){last=null;return}if(last)s.pointer={x,y,dx:e.clientX-last.x,dy:e.clientY-last.y};last={x:e.clientX,y:e.clientY}},{passive:true});host.addEventListener('pointerleave',()=>last=null,{passive:true})}}
-addEventListener('resize',()=>sims.forEach(resize),{passive:true});
-function frame(t){for(const s of sims){if(!s.visible)continue;if(!s.last)s.last=t;const dt=t-s.last;s.last=t;s.acc+=dt;if(s.acc>=33){step(s,t);draw(s);s.acc=0}}if(!reduced)requestAnimationFrame(frame)}
-if(reduced){for(const s of sims){addSteam(s,0);draw(s)}}else requestAnimationFrame(frame);
-window.__tsubasaEffects={isolated:true,disabledForPerformance:false,effects:['steam','advected-smoke'],engine:'low-res-advection',interactive:fine,canvasCount:sims.length,targetFps:30,maxGrid:128};
+const canvases=[...document.querySelectorAll('.fx-canvas[data-effect="steam"]')];if(!canvases.length)return;
+const fine=matchMedia('(hover:hover) and (pointer:fine)').matches,reduced=matchMedia('(prefers-reduced-motion:reduce)').matches;
+const V=`#version 300 es
+in vec2 a;out vec2 uv;void main(){uv=a*.5+.5;gl_Position=vec4(a,0.,1.);}`;
+const A=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D u;uniform vec2 px;uniform float dt;void main(){vec2 v=texture(u,uv).xy;vec2 p=uv-dt*v*px;o=texture(u,p);}`;
+const DIV=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D u;uniform vec2 px;void main(){float l=texture(u,uv-vec2(px.x,0)).x,r=texture(u,uv+vec2(px.x,0)).x,b=texture(u,uv-vec2(0,px.y)).y,t=texture(u,uv+vec2(0,px.y)).y;o=vec4(.5*(r-l+t-b),0,0,1);}`;
+const J=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D p;uniform sampler2D d;uniform vec2 px;void main(){float l=texture(p,uv-vec2(px.x,0)).x,r=texture(p,uv+vec2(px.x,0)).x,b=texture(p,uv-vec2(0,px.y)).x,t=texture(p,uv+vec2(0,px.y)).x,x=(l+r+b+t-texture(d,uv).x)*.25;o=vec4(x,0,0,1);}`;
+const G=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D v;uniform sampler2D p;uniform vec2 px;void main(){vec2 q=texture(v,uv).xy;float l=texture(p,uv-vec2(px.x,0)).x,r=texture(p,uv+vec2(px.x,0)).x,b=texture(p,uv-vec2(0,px.y)).x,t=texture(p,uv+vec2(0,px.y)).x;q-=.5*vec2(r-l,t-b);o=vec4(q*.995,0,1);}`;
+const S=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D u;uniform vec2 c;uniform vec3 val;uniform float rad;void main(){vec4 q=texture(u,uv);float r=exp(-dot(uv-c,uv-c)/rad);o=q+vec4(val*r,0);}`;
+const R=`#version 300 es
+precision highp float;in vec2 uv;out vec4 o;uniform sampler2D d;void main(){float a=clamp(texture(d,uv).x,0.,1.);a=smoothstep(.015,.42,a);vec3 col=mix(vec3(.78,.84,.88),vec3(1.),a);o=vec4(col,a*.50);}`;
+function glsim(c){const gl=c.getContext('webgl2',{alpha:true,antialias:false,premultipliedAlpha:false,preserveDrawingBuffer:true});if(!gl)return null;const ext=gl.getExtension('EXT_color_buffer_float');if(!ext)return null;
+ const sh=(t,s)=>{const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(x));return x},prog=f=>{const p=gl.createProgram();gl.attachShader(p,sh(gl.VERTEX_SHADER,V));gl.attachShader(p,sh(gl.FRAGMENT_SHADER,f));gl.linkProgram(p);return p},P={adv:prog(A),div:prog(DIV),jac:prog(J),grad:prog(G),splat:prog(S),render:prog(R)};
+ const vao=gl.createVertexArray();gl.bindVertexArray(vao);const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);for(const p of Object.values(P)){const l=gl.getAttribLocation(p,'a');gl.bindVertexArray(vao);gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0)}
+ let W=0,H=0;const tex=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);gl.texImage2D(gl.TEXTURE_2D,0,gl.RGBA16F,W,H,0,gl.RGBA,gl.HALF_FLOAT,null);return t},fb=t=>{const f=gl.createFramebuffer();gl.bindFramebuffer(gl.FRAMEBUFFER,f);gl.framebufferTexture2D(gl.FRAMEBUFFER,gl.COLOR_ATTACHMENT0,gl.TEXTURE_2D,t,0);return f};let vel,dye,pressure,div;
+ const pair=()=>{const a=tex(),b=tex();return{r:a,w:b,rf:fb(a),wf:fb(b),swap(){[this.r,this.w]=[this.w,this.r];[this.rf,this.wf]=[this.wf,this.rf]}}};
+ function resize(){const r=c.getBoundingClientRect(),mobile=r.width<700,long=mobile?96:160;W=long;H=Math.max(64,Math.round(long*r.height/r.width));c.width=W;c.height=H;vel=pair();dye=pair();pressure=pair();div={r:tex()};div.rf=fb(div.r)}resize();
+ const bind=(p,n,t,u)=>{gl.activeTexture(gl.TEXTURE0+u);gl.bindTexture(gl.TEXTURE_2D,t);gl.uniform1i(gl.getUniformLocation(p,n),u)},draw=(p,target)=>{gl.useProgram(p);gl.bindVertexArray(vao);gl.bindFramebuffer(gl.FRAMEBUFFER,target);gl.viewport(0,0,W,H);gl.drawArrays(gl.TRIANGLES,0,3)};
+ function adv(q,dt){const p=P.adv;gl.useProgram(p);bind(p,'u',q.r,0);gl.uniform2f(gl.getUniformLocation(p,'px'),1/W,1/H);gl.uniform1f(gl.getUniformLocation(p,'dt'),dt);draw(p,q.wf);q.swap()}
+ function splat(q,x,y,a,b,c0,rad=.0018){const p=P.splat;gl.useProgram(p);bind(p,'u',q.r,0);gl.uniform2f(gl.getUniformLocation(p,'c'),x,y);gl.uniform3f(gl.getUniformLocation(p,'val'),a,b,c0);gl.uniform1f(gl.getUniformLocation(p,'rad'),rad);draw(p,q.wf);q.swap()}
+ function project(){let p=P.div;gl.useProgram(p);bind(p,'u',vel.r,0);gl.uniform2f(gl.getUniformLocation(p,'px'),1/W,1/H);draw(p,div.rf);for(let i=0;i<10;i++){p=P.jac;gl.useProgram(p);bind(p,'p',pressure.r,0);bind(p,'d',div.r,1);gl.uniform2f(gl.getUniformLocation(p,'px'),1/W,1/H);draw(p,pressure.wf);pressure.swap()}p=P.grad;gl.useProgram(p);bind(p,'v',vel.r,0);bind(p,'p',pressure.r,1);gl.uniform2f(gl.getUniformLocation(p,'px'),1/W,1/H);draw(p,vel.wf);vel.swap()}
+ function render(){const p=P.render;gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(p);bind(p,'d',dye.r,0);draw(p,null);gl.disable(gl.BLEND)}
+ return{resize,step(t,pointer,profile){adv(vel,.65);project();adv(dye,.62);const src=profile==='tsubasa'?[.54,.43]:[.56,.47],w=.018*Math.sin(t*.0013);splat(vel,src[0],src[1],w,.12,0,.0024);splat(dye,src[0],src[1],.055,0,0,.0018);splat(dye,src[0]-.035,src[1]+.01,.026,0,0,.0015);if(pointer){splat(vel,pointer.x,1-pointer.y,pointer.dx*.003,-pointer.dy*.003,0,.004);splat(dye,pointer.x,1-pointer.y,.012,0,0,.002)}render()}}}
+ const sims=[];for(const c of canvases){let sim;try{sim=glsim(c)}catch(e){console.error(e)}if(!sim){c.style.display='none';continue}const s={c,sim,profile:c.dataset.profile,visible:false,p:null,last:null};sims.push(s);new IntersectionObserver(e=>s.visible=e[0].isIntersecting,{rootMargin:'100px'}).observe(c);if(fine){c.parentElement.addEventListener('pointermove',e=>{const r=c.getBoundingClientRect(),x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;if(x<0||x>1||y<0||y>1){s.last=null;return}if(s.last)s.p={x,y,dx:e.clientX-s.last.x,dy:e.clientY-s.last.y};s.last={x:e.clientX,y:e.clientY}},{passive:true});c.parentElement.addEventListener('pointerleave',()=>s.last=null,{passive:true})}}
+ let last=0;function frame(t){if(t-last>33){for(const s of sims)if(s.visible){s.sim.step(t,s.p,s.profile);s.p=null}last=t}if(!reduced)requestAnimationFrame(frame)}if(!reduced)requestAnimationFrame(frame);window.__tsubasaEffects={engine:'webgl2-stable-fluid',effects:['steam','velocity','density','advection','pressure','splat'],interactive:fine,canvasCount:sims.length,targetFps:30,gpu:true};
 })();
