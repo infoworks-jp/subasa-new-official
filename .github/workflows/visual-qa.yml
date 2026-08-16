@@ -1,0 +1,87 @@
+name: Visual QA
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'assets-pack.zip'
+
+permissions:
+  contents: read
+
+jobs:
+  qa:
+    if: ${{ hashFiles('assets/ultimate-miso.webp') != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify static contract
+        run: |
+          set -euo pipefail
+          test -f index.html && test -f style.css && test -f app.js
+          grep -q '究極の' index.html
+          grep -q 'つばさ<br>ラーメン' index.html
+          grep -q '11:00 — 03:00' index.html
+          grep -q '毎週月曜日 定休' index.html
+          for f in assets/ultimate-miso.webp assets/tsubasa-ramen.webp assets/menu-ja.webp assets/menu-en.webp assets/menu-zh.webp assets/menu-ko.webp; do test -s "$f"; done
+      - name: Install Playwright
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Start preview
+        run: |
+          python3 -m http.server 4173 >/tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          sleep 2
+      - name: Browser QA and screenshots
+        run: |
+          cat > /tmp/qa.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          const browser=await chromium.launch({headless:true});
+          const cases=[['desktop',1440,1100],['mobile',390,844]];
+          const report={passed:true,cases:{}};
+          for(const [name,width,height] of cases){
+            const page=await browser.newPage({viewport:{width,height},deviceScaleFactor:1});
+            const bad=[];
+            page.on('console',m=>{if(m.type()==='error') bad.push('console:'+m.text())});
+            page.on('pageerror',e=>bad.push('pageerror:'+e.message));
+            await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
+            await page.waitForTimeout(4500);
+            const data=await page.evaluate(()=>({
+              title:document.title,
+              text:document.body.innerText,
+              imgs:[...document.images].map(i=>({src:i.getAttribute('src'),w:i.naturalWidth,h:i.naturalHeight,complete:i.complete})),
+              scrollHeight:document.documentElement.scrollHeight
+            }));
+            for(const i of data.imgs) if(!i.complete||i.w===0||i.h===0) bad.push('broken:'+i.src);
+            for(const s of ['究極の','つばさ','11:00','月曜日']) if(!data.text.includes(s)) bad.push('missing-text:'+s);
+            await page.screenshot({path:`qa/${name}-full.png`,fullPage:true});
+            await page.locator('#top').screenshot({path:`qa/${name}-top.png`});
+            await page.locator('#signature').screenshot({path:`qa/${name}-miso.png`});
+            const sig2=page.locator('.signature-tsubasa'); if(await sig2.count()) await sig2.screenshot({path:`qa/${name}-tsubasa.png`});
+            await page.locator('#menu').scrollIntoViewIfNeeded();
+            const buttons=page.locator('[data-menu]');
+            if(await buttons.count()!==4) bad.push('menu-buttons');
+            report.cases[name]={bad,images:data.imgs.length,scrollHeight:data.scrollHeight};
+            if(bad.length) report.passed=false;
+            await page.close();
+          }
+          await browser.close();
+          fs.writeFileSync('qa/report.json',JSON.stringify(report,null,2));
+          console.log(JSON.stringify(report,null,2));
+          if(!report.passed) process.exit(1);
+          JS
+          mkdir -p qa
+          node /tmp/qa.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tsubasa-visual-qa
+          path: qa
+          retention-days: 14
