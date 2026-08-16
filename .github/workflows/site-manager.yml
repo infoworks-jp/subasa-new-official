@@ -76,7 +76,7 @@ jobs:
       - name: FUNCTION_DESKTOP_MOBILE_INTERACTION_PASS
         shell: bash
         run: |
-          cat > /tmp/site-manager.mjs <<'JS'
+          cat > site-manager.mjs <<'JS'
           import { chromium } from 'playwright';
           import fs from 'fs';
           import {PNG} from 'pngjs';
@@ -109,7 +109,7 @@ jobs:
           }
           await browser.close(); fs.writeFileSync('evidence/report.json',JSON.stringify(result,null,2)); if(!result.passed) process.exit(1);
           JS
-          node /tmp/site-manager.mjs
+          node site-manager.mjs
       - name: MANAGER_VERDICT
         run: |
           printf 'commit=%s\nCONTRACT_PASS=1\nASSET_INTEGRITY_PASS=1\nCONTENT_PASS=1\nFUNCTION_PASS=1\nDESKTOP_VISUAL_PASS=1\nMOBILE_VISUAL_PASS=1\nINTERACTION_PASS=1\nmanager=VERIFIED\n' "$GITHUB_SHA" > evidence/VERDICT.txt
