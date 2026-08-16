@@ -1,15 +1,20 @@
 (()=>{
-const canvases=[...document.querySelectorAll('.fx-canvas[data-effect="steam"]')];if(!canvases.length)return;
-const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches,DPR=Math.min(devicePixelRatio||1,1.5),states=[];
-function init(c){const ctx=c.getContext('2d',{alpha:true}),s={c,ctx,w:1,h:1,last:performance.now(),pointer:null,particles:[],profile:c.dataset.profile};resize(s);for(let i=0;i<42;i++)spawn(s,true);states.push(s);return s}
-function resize(s){const r=s.c.getBoundingClientRect();s.w=Math.max(1,r.width);s.h=Math.max(1,r.height);s.c.width=Math.round(s.w*DPR);s.c.height=Math.round(s.h*DPR);s.ctx.setTransform(DPR,0,0,DPR,0,0)}
-function origin(s){const mobile=s.w<700;return{x:s.w*(s.profile==='tsubasa'?(mobile?.49:.57):(mobile?.51:.56)),y:s.h*(s.profile==='tsubasa'?(mobile?.57:.56):(mobile?.55:.54))}}
-function spawn(s,seed=false,x=null,y=null){const o=origin(s),p={x:x??o.x+(Math.random()-.5)*s.w*.07,y:y??o.y+(seed?Math.random()*s.h*.18:0),vx:(Math.random()-.5)*10,vy:-16-Math.random()*24,life:seed?Math.random():0,size:10+Math.random()*22,phase:Math.random()*6.28};s.particles.push(p)}
-function inject(s,px,py,strong=false){const x=px*s.w,y=py*s.h;for(let i=0;i<(strong?12:5);i++)spawn(s,false,x+(Math.random()-.5)*22,y+(Math.random()-.5)*18)}
-function step(s,dt,t){if(s.particles.length<70)for(let i=0;i<3;i++)spawn(s);for(const p of s.particles){p.life+=dt*.34;p.phase+=dt*2;p.vx+=Math.sin(t*.001+p.phase)*dt*8;p.x+=p.vx*dt;p.y+=p.vy*dt;p.size+=dt*9}for(let i=s.particles.length-1;i>=0;i--){const p=s.particles[i];if(p.life>1||p.y<-60||p.x<-80||p.x>s.w+80)s.particles.splice(i,1)}}
-function draw(s){const {ctx,w,h}=s;ctx.clearRect(0,0,w,h);ctx.save();ctx.globalCompositeOperation='screen';ctx.filter='blur(7px)';for(const p of s.particles){const fade=Math.sin(Math.min(1,p.life)*Math.PI),a=Math.max(.035,fade*.20);const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,p.size*1.8);g.addColorStop(0,`rgba(255,255,255,${a})`);g.addColorStop(.45,`rgba(235,242,245,${a*.65})`);g.addColorStop(1,'rgba(220,230,235,0)');ctx.fillStyle=g;ctx.beginPath();ctx.ellipse(p.x,p.y,p.size*1.45,p.size*2.25,Math.sin(p.phase)*.18,0,Math.PI*2);ctx.fill()}ctx.restore()}
-for(const c of canvases){const s=init(c);let last=null;const pos=e=>{const r=c.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width,y:(e.clientY-r.top)/r.height}};c.style.pointerEvents='auto';c.addEventListener('pointermove',e=>{const p=pos(e);inject(s,p.x,p.y,!!last);last=p;clearTimeout(s.pointer);s.pointer=setTimeout(()=>last=null,100)},{passive:true});c.addEventListener('pointerdown',e=>{const p=pos(e);inject(s,p.x,p.y,true)},{passive:true})}
-addEventListener('resize',()=>states.forEach(resize),{passive:true});
-function frame(t){for(const s of states){const dt=Math.min(.04,(t-s.last)/1000||.016);s.last=t;if(!reduced)step(s,dt,t);draw(s)}if(!reduced)requestAnimationFrame(frame)}requestAnimationFrame(frame);
-window.__tsubasaEffects={isolated:true,disabledForPerformance:false,effects:['steam','fluid-steam'],engine:'particle-fluid-steam',interactive:true,canvasCount:states.length};
+/* Performance reset: the previous particle steam renderer failed the visual brief
+   and caused continuous main-thread/canvas work. Keep the effect contract explicit
+   but do not render until the replacement WebGL fluid implementation is ready. */
+const canvases=[...document.querySelectorAll('.fx-canvas[data-effect="steam"]')];
+for(const c of canvases){
+  const ctx=c.getContext('2d');
+  if(ctx)ctx.clearRect(0,0,c.width,c.height);
+  c.style.pointerEvents='none';
+  c.style.display='none';
+}
+window.__tsubasaEffects={
+  isolated:true,
+  disabledForPerformance:true,
+  effects:[],
+  engine:'disabled-failed-steam-reset',
+  interactive:false,
+  canvasCount:canvases.length
+};
 })();
