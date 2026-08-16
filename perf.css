@@ -1,0 +1,9 @@
+/* Scroll performance overrides. Visual tone is preserved with existing veil layers. */
+.noise{display:none!important}
+.signature .media{filter:none!important}
+.shop-photo{filter:none!important}
+.food-card img{transition:none!important}
+.reveal{transition:opacity .35s ease,transform .35s ease!important}
+.scene,.shop-section,.section{contain:paint}
+img{content-visibility:auto}
+@media (hover:hover) and (pointer:fine){.food-card:hover img{transform:none!important}}
