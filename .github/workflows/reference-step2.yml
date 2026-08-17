@@ -1,0 +1,71 @@
+name: Pavel Migration STEP 2
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  step2-source-position:
+    name: STEP 2 / measured source position only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce STEP 2 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s reference/step2-source-position.html
+          grep -q 'PavelDoGreat/WebGL-Fluid-Simulation@master' reference/step2-source-position.html
+          grep -q 'X=.632,Y=.486' reference/step2-source-position.html
+          grep -q 'fluidSettingsChanged:false' reference/step2-source-position.html
+          if grep -Eq 'config\.[A-Z_]+[[:space:]]*=' reference/step2-source-position.html; then echo 'FAIL: STEP2 changed upstream fluid config'; exit 1; fi
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Verify measured source emits fluid at target region
+        shell: bash
+        run: |
+          cat > step2.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import pixelmatch from 'pixelmatch';
+          import { PNG } from 'pngjs';
+          fs.mkdirSync('step2-evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const report={commit:process.env.GITHUB_SHA,step:'STEP 2 source position only',passed:true,cases:{}};
+          const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.04,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n};
+          for(const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]){
+            const errors=[];const page=await browser.newPage({viewport:{width,height}});
+            await page.goto(`https://infoworks-jp.github.io/subasa-new-official/reference/step2-source-position.html?qa=${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForTimeout(2200);
+            const state=await page.evaluate(()=>window.__pavelMigrationStep2||null);
+            if(!state||state.fluidSettingsChanged!==false)errors.push('step2-state-invalid');
+            if(Math.abs(state?.source?.x-.632)>.001||Math.abs(state?.source?.y-.486)>.001)errors.push('measured-source-coordinate-changed');
+            const canvas=page.locator('canvas');await canvas.waitFor({state:'visible',timeout:15000});
+            await page.screenshot({path:`step2-evidence/${name}-t0.png`});
+            await page.waitForTimeout(1200);await page.screenshot({path:`step2-evidence/${name}-t1.png`});
+            await page.waitForTimeout(1800);await page.screenshot({path:`step2-evidence/${name}-t3.png`});
+            const d01=diff(`step2-evidence/${name}-t0.png`,`step2-evidence/${name}-t1.png`,`step2-evidence/${name}-diff01.png`);const d13=diff(`step2-evidence/${name}-t1.png`,`step2-evidence/${name}-t3.png`,`step2-evidence/${name}-diff13.png`);
+            if(d01<500||d13<500)errors.push(`source-motion-low:${d01}/${d13}`);
+            const clip={x:Math.max(0,width*.50),y:Math.max(0,height*.26),width:Math.min(width*.30,width-width*.50),height:Math.min(height*.40,height-height*.26)};
+            await page.screenshot({path:`step2-evidence/${name}-source-region.png`,clip});
+            report.cases[name]={state,naturalDiff01:d01,naturalDiff13:d13,sourceClip:clip,errors};if(errors.length)report.passed=false;await page.close();
+          }
+          await browser.close();fs.writeFileSync('step2-evidence/report.json',JSON.stringify(report,null,2));if(!report.passed)process.exit(1);
+          JS
+          node step2.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PAVEL-MIGRATION-STEP2-${{ github.sha }}
+          path: step2-evidence
+          retention-days: 90
