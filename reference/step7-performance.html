@@ -15,7 +15,8 @@
 <script src="script.js"></script>
 <script>
 /* STEP 7 ONLY: performance. Keep STEP6 source/appearance/interaction values unchanged.
-   Solver stages remain PavelDoGreat upstream; only simulation/dye resolution, Jacobi iterations and offscreen pause are changed. */
+   Solver stages remain PavelDoGreat upstream. Performance changes are lower simulation/dye resolution,
+   fewer Jacobi iterations, offscreen solver pause, and disabling only the optional bloom/sunrays post-processes. */
 (()=>{
  const c=document.querySelector('canvas'),stage=document.getElementById('stage');
  const mobile=matchMedia('(max-width:640px)').matches;
@@ -25,9 +26,10 @@
  const SIM_RESOLUTION=mobile?64:96;
  const DYE_RESOLUTION=mobile?256:512;
  const PRESSURE_ITERATIONS=mobile?10:14;
+ const BLOOM_ENABLED=false,SUNRAYS_ENABLED=false;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE},noDye={r:0,g:0,b:0};
  config.COLORFUL=false;config.DENSITY_DISSIPATION=DENSITY_DISSIPATION;config.VELOCITY_DISSIPATION=VELOCITY_DISSIPATION;config.CURL=CURL_STRENGTH;config.SPLAT_RADIUS=SPLAT_RADIUS;
- config.SIM_RESOLUTION=SIM_RESOLUTION;config.DYE_RESOLUTION=DYE_RESOLUTION;config.PRESSURE_ITERATIONS=PRESSURE_ITERATIONS;
+ config.SIM_RESOLUTION=SIM_RESOLUTION;config.DYE_RESOLUTION=DYE_RESOLUTION;config.PRESSURE_ITERATIONS=PRESSURE_ITERATIONS;config.BLOOM=BLOOM_ENABLED;config.SUNRAYS=SUNRAYS_ENABLED;
  if(Array.isArray(splatStack))splatStack.length=0;
  initFramebuffers();
  function clearFBO(target){if(!target||!target.fbo)return;gl.bindFramebuffer(gl.FRAMEBUFFER,target.fbo);gl.viewport(0,0,target.width,target.height);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT)}
@@ -39,7 +41,7 @@
  function stir(clientX,clientY){if(!solverActive)return;const r=c.getBoundingClientRect();const x=(clientX-r.left)/r.width,y=1-(clientY-r.top)/r.height;if(x<0||x>1||y<0||y>1){last=null;return}if(!last){last={x:clientX,y:clientY};return}const dx=(clientX-last.x)/r.width,dy=-(clientY-last.y)/r.height;last={x:clientX,y:clientY};if(Math.hypot(dx,dy)<.0004)return;const vx=Math.max(-90,Math.min(90,dx*POINTER_FORCE)),vy=Math.max(-90,Math.min(90,dy*POINTER_FORCE)),saved=config.SPLAT_RADIUS;config.SPLAT_RADIUS=POINTER_RADIUS;splat(x,y,vx,vy,noDye);config.SPLAT_RADIUS=saved;pointerSplats++}
  c.addEventListener('pointermove',e=>stir(e.clientX,e.clientY),{passive:true});c.addEventListener('pointerleave',()=>last=null,{passive:true});
  const observer=new IntersectionObserver(entries=>{solverActive=entries[0].isIntersecting;config.PAUSED=!solverActive;c.style.visibility=solverActive?'visible':'hidden';if(solverActive)last=null},{threshold:.01});observer.observe(stage);
- window.__pavelMigrationStep7={source:{x:X,y:Y},dyeAmplitude:DYE_AMPLITUDE,intervalMs:EMIT_INTERVAL_MS,upwardForce:UPWARD_FORCE,lateralForce:LATERAL_FORCE,densityDissipation:DENSITY_DISSIPATION,velocityDissipation:VELOCITY_DISSIPATION,curl:CURL_STRENGTH,splatRadius:SPLAT_RADIUS,pointerRadius:POINTER_RADIUS,pointerForce:POINTER_FORCE,pointerAddsDye:false,simResolution:SIM_RESOLUTION,dyeResolution:DYE_RESOLUTION,pressureIterations:PRESSURE_ITERATIONS,offscreenPause:true,upstreamSolver:true,get solverActive(){return solverActive},get pointerSplats(){return pointerSplats},onlyChange:'performance'};
+ window.__pavelMigrationStep7={source:{x:X,y:Y},dyeAmplitude:DYE_AMPLITUDE,intervalMs:EMIT_INTERVAL_MS,upwardForce:UPWARD_FORCE,lateralForce:LATERAL_FORCE,densityDissipation:DENSITY_DISSIPATION,velocityDissipation:VELOCITY_DISSIPATION,curl:CURL_STRENGTH,splatRadius:SPLAT_RADIUS,pointerRadius:POINTER_RADIUS,pointerForce:POINTER_FORCE,pointerAddsDye:false,simResolution:SIM_RESOLUTION,dyeResolution:DYE_RESOLUTION,pressureIterations:PRESSURE_ITERATIONS,bloom:BLOOM_ENABLED,sunrays:SUNRAYS_ENABLED,offscreenPause:true,upstreamSolver:true,get solverActive(){return solverActive},get pointerSplats(){return pointerSplats},onlyChange:'performance'};
 })();
 </script>
 </body>
