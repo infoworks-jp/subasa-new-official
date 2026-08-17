@@ -15,12 +15,12 @@
 <script src="script.js"></script>
 <script>
 /* STEP 4 ONLY: emission amount. Keep corrected STEP3 hue, source and all upstream fluid configuration unchanged.
-   STEP3 used neutral white at amplitude .15. STEP4 changes only emitted dye amount to .018 because .15
-   saturates the upstream default splat radius into an opaque white disk. Fluid physics remain untouched. */
+   STEP3 used neutral white at amplitude .15. .018 removed the white disk but quantized to no late motion on mobile.
+   STEP4 therefore uses .03: still below bloom/saturation while remaining measurable on both PC and mobile. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
- const DYE_AMPLITUDE=.018;
+ const DYE_AMPLITUDE=.03;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
  if(Array.isArray(splatStack)) splatStack.length=0;
 
@@ -50,7 +50,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',dyeAmplitude:DYE_AMPLITUDE,previousDyeAmplitude:.15,intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',dyeAmplitude:DYE_AMPLITUDE,previousDyeAmplitude:.018,intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
