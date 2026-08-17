@@ -24,7 +24,7 @@ if(!('gpu' in navigator)){
   stage.classList.add('webgpu-unavailable');
   window.__tsubasaFluid={engine:'three-fluid-fx',renderer:'fallback-pending',pointer:false,reason:'WebGPU unavailable'};
 }else{
-  const CAMERA_FOV=45,CAMERA_Z=6.4,FIXED_FLUID_DT=1/60,MAX_FLUID_SUBSTEPS=1;
+  const CAMERA_FOV=45,CAMERA_Z=6.4,FIXED_FLUID_DT=1/60;
   const renderer=new WebGPURenderer({antialias:false,forceWebGL:false});
   renderer.outputColorSpace=SRGBColorSpace;renderer.toneMapping=ACESFilmicToneMapping;renderer.toneMappingExposure=.95;renderer.setClearColor(new Color('#050303'),1);
   renderer.domElement.id='fluidTextCanvas';
@@ -47,10 +47,12 @@ if(!('gpu' in navigator)){
     const getWorldViewport=()=>{const height=2*CAMERA_Z*Math.tan((CAMERA_FOV*Math.PI)/360);return{height,width:height*camera.aspect}};
     const textureAspect=t=>{const i=t.image;return(i?.naturalWidth||i?.videoWidth||i?.width||1)/(i?.naturalHeight||i?.videoHeight||i?.height||1)};
     const fitCover=(mesh,t,v)=>{const ia=textureAspect(t),va=v.width/v.height;let w=v.width,h=v.height;if(ia>va)w=v.height*ia;else h=v.width/ia;mesh.scale.set(w,h,1)};
-    const resize=()=>{const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight),mobile=w<=700,dpr=Math.min(window.devicePixelRatio||1,mobile?.9:1.1);renderer.setPixelRatio(dpr);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();fluid.resize(w,h);const img=fluid.dyeTexture.image,dw=img.width??512,dh=img.height??512;dyeTexel.value.set(1/dw,1/dh);fitCover(bgMesh,slideTexture,getWorldViewport())};
+    const resize=()=>{const w=Math.max(1,stage.clientWidth),h=Math.max(1,stage.clientHeight),mobile=w<=700,dpr=Math.min(window.devicePixelRatio||1,mobile?.8:1);renderer.setPixelRatio(dpr);renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();fluid.resize(w,h);const img=fluid.dyeTexture.image,dw=img.width??512,dh=img.height??512;dyeTexel.value.set(1/dw,1/dh);fitCover(bgMesh,slideTexture,getWorldViewport())};
     resize();window.addEventListener('resize',resize,{passive:true});
-    const clock=new Timer();let acc=0,frame=0,ready=false;
-    renderer.setAnimationLoop(()=>{clock.update();const dt=Math.min(Math.max(clock.getDelta(),1e-6),FIXED_FLUID_DT);elapsedTime.value=clock.getElapsed();acc+=dt;if(acc>=FIXED_FLUID_DT){fluid.step(FIXED_FLUID_DT);acc=0}pipeline.render();frame++;if(!ready&&frame>1){ready=true;stage.classList.add('fluid-ready')}window.__tsubasaFluid={frame,engine:'three-fluid-fx',renderer:'WebGPU',slide:slidePath,distortion:false,pointer:true}});
+    const clock=new Timer();let acc=0,frame=0,ready=false,scrolling=false,scrollTimer=0,visible=true;
+    new IntersectionObserver(es=>{visible=es[0]?.isIntersecting??true},{rootMargin:'80px'}).observe(stage);
+    window.addEventListener('scroll',()=>{scrolling=true;clearTimeout(scrollTimer);scrollTimer=setTimeout(()=>{scrolling=false},120)},{passive:true});
+    renderer.setAnimationLoop(()=>{clock.update();if(!visible||scrolling){window.__tsubasaFluid={frame,engine:'three-fluid-fx',renderer:'WebGPU',slide:slidePath,distortion:false,pointer:true,paused:true};return}const dt=Math.min(Math.max(clock.getDelta(),1e-6),FIXED_FLUID_DT);elapsedTime.value=clock.getElapsed();acc+=dt;if(acc>=FIXED_FLUID_DT){fluid.step(FIXED_FLUID_DT);acc=0}pipeline.render();frame++;if(!ready&&frame>1){ready=true;stage.classList.add('fluid-ready')}window.__tsubasaFluid={frame,engine:'three-fluid-fx',renderer:'WebGPU',slide:slidePath,distortion:false,pointer:true,paused:false}});
     window.addEventListener('pagehide',()=>{renderer.setAnimationLoop(null);window.removeEventListener('resize',resize);detachPointerSplats?.();bgMaterial.dispose();bgMesh.geometry.dispose();slideTexture.dispose();fluid.dispose?.();renderer.dispose()},{once:true});
   }catch(error){console.error(error);stage.classList.add('webgpu-unavailable');renderer.domElement.remove();window.__tsubasaFluid={engine:'three-fluid-fx',renderer:'fallback-pending',pointer:false,reason:String(error?.message||error)}}
 }
