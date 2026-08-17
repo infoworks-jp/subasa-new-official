@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
+<title>STEP 5 — velocity, vorticity and diffusion only</title>
+<script src="dat.gui.min.js"></script>
+<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen}.dg,.promo{display:none!important}</style>
+<script>window.ga=function(){};</script>
+</head>
+<body>
+<canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
+<script src="script.js"></script>
+<script>
+/* STEP 5 ONLY: velocity, vorticity and diffusion.
+   Keep STEP4 source X=.632/Y=.486, neutral-white dye amplitude .03 and 150ms emission cadence.
+   Use PavelDoGreat's own splat() to inject an upward velocity vector into the unchanged solver.
+   No particle/CSS/noise substitute and no resolution/radius/rendering change. */
+(()=>{
+ const X=.632,Y=.486;
+ const SOURCE_SCREEN_Y=Y+.025;
+ const SOURCE_FLUID_Y=1-SOURCE_SCREEN_Y;
+ const DYE_AMPLITUDE=.03;
+ const EMIT_INTERVAL_MS=150;
+ const UPWARD_FORCE=38;
+ const LATERAL_FORCE=7;
+ const DENSITY_DISSIPATION=1.25;
+ const VELOCITY_DISSIPATION=.18;
+ const CURL_STRENGTH=42;
+ const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
+
+ config.COLORFUL=false;
+ config.DENSITY_DISSIPATION=DENSITY_DISSIPATION;
+ config.VELOCITY_DISSIPATION=VELOCITY_DISSIPATION;
+ config.CURL=CURL_STRENGTH;
+ if(Array.isArray(splatStack)) splatStack.length=0;
+
+ function clearFBO(target){
+   if(!target||!target.fbo)return;
+   gl.bindFramebuffer(gl.FRAMEBUFFER,target.fbo);
+   gl.viewport(0,0,target.width,target.height);
+   gl.clearColor(0,0,0,0);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+ }
+ function zeroFluidState(){
+   [dye?.read,dye?.write,velocity?.read,velocity?.write,pressure?.read,pressure?.write,divergence,curl].forEach(clearFBO);
+   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+   gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);
+ }
+ zeroFluidState();
+
+ let i=0;
+ let timer=null;
+ function emitSteam(){
+   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*2.0;
+   const sourceX=X + Math.sin(i*.31)*.0015;
+   const sourceY=SOURCE_FLUID_Y + Math.sin(i*.23)*.0010;
+   splat(sourceX,sourceY,dx,UPWARD_FORCE,white);
+   i++;
+ }
+ setTimeout(()=>{
+   emitSteam();
+   timer=setInterval(emitSteam,EMIT_INTERVAL_MS);
+ },1800);
+
+ window.__pavelMigrationStep5={
+   source:{x:X,y:Y},
+   sourceFluidY:SOURCE_FLUID_Y,
+   color:'neutral-white',
+   dyeAmplitude:DYE_AMPLITUDE,
+   intervalMs:EMIT_INTERVAL_MS,
+   upwardForce:UPWARD_FORCE,
+   lateralForce:LATERAL_FORCE,
+   densityDissipation:DENSITY_DISSIPATION,
+   velocityDissipation:VELOCITY_DISSIPATION,
+   curl:CURL_STRENGTH,
+   upstreamSplat:true,
+   explicitFramebufferZero:true,
+   visualFilter:'none',
+   onlyChange:'velocityVorticityDiffusion'
+ };
+})();
+</script>
+</body>
+</html>
