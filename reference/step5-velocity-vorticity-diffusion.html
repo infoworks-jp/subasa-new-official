@@ -16,19 +16,19 @@
 <script>
 /* STEP 5 ONLY: velocity, vorticity and diffusion.
    Keep STEP4 source X=.632/Y=.486, neutral-white dye amplitude .03 and 150ms emission cadence.
-   Use PavelDoGreat's own splat() to inject an upward velocity vector into the unchanged solver.
-   No alternate renderer and no resolution/radius/rendering change. */
+   Previous STEP5 trial (upward 38, lateral 7, curl 42, density 1.25, velocity .18) expanded into an oversized cloud.
+   This trial reduces injected momentum and increases dissipation while retaining PavelDoGreat's own splat() and solver. */
 (()=>{
  const X=.632,Y=.486;
  const SOURCE_SCREEN_Y=Y+.025;
  const SOURCE_FLUID_Y=1-SOURCE_SCREEN_Y;
  const DYE_AMPLITUDE=.03;
  const EMIT_INTERVAL_MS=150;
- const UPWARD_FORCE=38;
- const LATERAL_FORCE=7;
- const DENSITY_DISSIPATION=1.25;
- const VELOCITY_DISSIPATION=.18;
- const CURL_STRENGTH=42;
+ const UPWARD_FORCE=14;
+ const LATERAL_FORCE=2.5;
+ const DENSITY_DISSIPATION=2.2;
+ const VELOCITY_DISSIPATION=.55;
+ const CURL_STRENGTH=32;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
 
  config.COLORFUL=false;
@@ -54,7 +54,7 @@
  let i=0;
  let timer=null;
  function emitSteam(){
-   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*2.0;
+   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*.8;
    const sourceX=X + Math.sin(i*.31)*.0015;
    const sourceY=SOURCE_FLUID_Y + Math.sin(i*.23)*.0010;
    splat(sourceX,sourceY,dx,UPWARD_FORCE,white);
