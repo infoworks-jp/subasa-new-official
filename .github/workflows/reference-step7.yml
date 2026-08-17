@@ -1,0 +1,66 @@
+name: Pavel Migration STEP 7
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  step7-performance:
+    name: STEP 7 / performance only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce STEP 7 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s reference/step6-pointer-interaction.html
+          test -s reference/step7-performance.html
+          grep -q 'DYE_AMPLITUDE=.03' reference/step7-performance.html
+          grep -q 'EMIT_INTERVAL_MS=150' reference/step7-performance.html
+          grep -q 'UPWARD_FORCE=10' reference/step7-performance.html
+          grep -q 'LATERAL_FORCE=1.2' reference/step7-performance.html
+          grep -q 'DENSITY_DISSIPATION=3.2' reference/step7-performance.html
+          grep -q 'VELOCITY_DISSIPATION=1.0' reference/step7-performance.html
+          grep -q 'CURL_STRENGTH=24' reference/step7-performance.html
+          grep -q 'SPLAT_RADIUS=.04' reference/step7-performance.html
+          grep -q 'POINTER_RADIUS=.12' reference/step7-performance.html
+          grep -q 'POINTER_FORCE=1700' reference/step7-performance.html
+          grep -q 'SIM_RESOLUTION=mobile?64:96' reference/step7-performance.html
+          grep -q 'DYE_RESOLUTION=mobile?256:512' reference/step7-performance.html
+          grep -q 'PRESSURE_ITERATIONS=mobile?10:14' reference/step7-performance.html
+          grep -q 'config.PAUSED=!solverActive' reference/step7-performance.html
+          grep -q "onlyChange:'performance'" reference/step7-performance.html
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Verify performance profile preserves fluid behavior
+        shell: bash
+        run: |
+          cat > step7.mjs <<'JS'
+          import {chromium} from 'playwright';import fs from 'fs';import pixelmatch from 'pixelmatch';import {PNG} from 'pngjs';
+          fs.mkdirSync('step7-evidence',{recursive:true});const browser=await chromium.launch({headless:true});const report={commit:process.env.GITHUB_SHA,step:'STEP 7 performance only',passed:true,cases:{}};
+          const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.035,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n};
+          const stats=path=>{const P=PNG.sync.read(fs.readFileSync(path));let n=0,minX=P.width,maxX=-1,minY=P.height,maxY=-1;for(let y=0;y<P.height;y++)for(let x=0;x<P.width;x++){const i=(y*P.width+x)*4;if(Math.max(P.data[i],P.data[i+1],P.data[i+2])>20){n++;minX=Math.min(minX,x);maxX=Math.max(maxX,x);minY=Math.min(minY,y);maxY=Math.max(maxY,y)}}return{active:n,width:maxX>=minX?maxX-minX+1:0,height:maxY>=minY?maxY-minY+1:0,minY,maxY};};
+          const canvasOnly=async(page,path)=>{await page.evaluate(()=>{const c=document.querySelector('canvas'),s=document.getElementById('stage');s.style.background='#000';c.style.mixBlendMode='normal';c.style.background='#000';});await page.locator('canvas').screenshot({path});await page.evaluate(()=>{const c=document.querySelector('canvas'),s=document.getElementById('stage');s.style.background='';c.style.mixBlendMode='';c.style.background='';});};
+          for(const [name,w,h] of [['desktop',1440,1100],['mobile',390,844]]){const errors=[];const page=await browser.newPage({viewport:{width:w,height:h}});page.on('pageerror',e=>errors.push('pageerror:'+e.message));await page.goto(`https://infoworks-jp.github.io/subasa-new-official/reference/step7-performance.html?qa=${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});await page.waitForTimeout(4500);const state=await page.evaluate(()=>window.__pavelMigrationStep7?{...window.__pavelMigrationStep7,solverActive:window.__pavelMigrationStep7.solverActive,pointerSplats:window.__pavelMigrationStep7.pointerSplats}:null);const expected=name==='mobile'?{sim:64,dye:256,p:10}:{sim:96,dye:512,p:14};if(!state||state.onlyChange!=='performance'||state.simResolution!==expected.sim||state.dyeResolution!==expected.dye||state.pressureIterations!==expected.p||state.pointerAddsDye!==false||state.offscreenPause!==true||state.solverActive!==true)errors.push('step7-state-invalid');await canvasOnly(page,`step7-evidence/${name}-before.png`);await page.waitForTimeout(1200);await canvasOnly(page,`step7-evidence/${name}-natural.png`);const natural=diff(`step7-evidence/${name}-before.png`,`step7-evidence/${name}-natural.png`,`step7-evidence/${name}-natural-diff.png`);const st=stats(`step7-evidence/${name}-natural.png`);const minMotion=Math.max(25,Math.round(120*(w*h)/(1440*1100)));if(natural<minMotion)errors.push(`natural-motion-low:${natural}<${minMotion}`);if(st.active<Math.max(30,Math.round(180*(w*h)/(1440*1100)))||st.height<.04*h)errors.push(`plume-degraded:${JSON.stringify(st)}`);
+            if(name==='desktop'){await page.mouse.move(w*.50,h*.45);await page.mouse.move(w*.70,h*.40,{steps:20});}else{await page.evaluate(({w,h})=>{const c=document.querySelector('canvas');for(let k=0;k<20;k++)c.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,clientX:w*(.49+.21*k/19),clientY:h*(.45-.04*Math.sin(k*.5)),pointerType:'touch',pointerId:8}))},{w,h});}await page.waitForTimeout(250);await canvasOnly(page,`step7-evidence/${name}-pointer.png`);const pointer=diff(`step7-evidence/${name}-natural.png`,`step7-evidence/${name}-pointer.png`,`step7-evidence/${name}-pointer-diff.png`);const ps=await page.evaluate(()=>window.__pavelMigrationStep7.pointerSplats);if(ps<8||pointer<minMotion)errors.push(`pointer-degraded:${ps}/${pointer}`);
+            const perf=await page.evaluate(async()=>{const a=[];let prev=performance.now();for(let i=0;i<100;i++)await new Promise(r=>requestAnimationFrame(t=>{a.push(t-prev);prev=t;r()}));a.sort((x,y)=>x-y);return{avg:a.reduce((x,y)=>x+y,0)/a.length,p95:a[Math.floor(a.length*.95)],long:a.filter(x=>x>50).length};});if(perf.avg>35||perf.p95>65||perf.long>10)errors.push(`visible-perf:${JSON.stringify(perf)}`);await page.evaluate(()=>scrollTo(0,document.documentElement.scrollHeight));await page.waitForTimeout(500);const off=await page.evaluate(()=>({active:window.__pavelMigrationStep7.solverActive,paused:config.PAUSED,visibility:getComputedStyle(document.querySelector('canvas')).visibility}));if(off.active!==false||off.paused!==true||off.visibility!=='hidden')errors.push(`offscreen-not-paused:${JSON.stringify(off)}`);report.cases[name]={state,naturalDiff:natural,pointerDiff:pointer,pointerSplats:ps,plume:st,performance:perf,offscreen:off,errors};if(errors.length)report.passed=false;await page.close();}
+          await browser.close();fs.writeFileSync('step7-evidence/report.json',JSON.stringify(report,null,2));if(!report.passed)process.exit(1);
+          JS
+          node step7.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PAVEL-MIGRATION-STEP7-${{ github.sha }}
+          path: step7-evidence
+          retention-days: 90
