@@ -1,1 +1,1 @@
-(()=>{const s=document.createElement('script');s.src='steam-gpu.js?v=steam-gpu-2';document.body.appendChild(s)})();
+(()=>{const s=document.createElement('script');s.src='effects.js?v=full-fluid-restored-1';document.body.appendChild(s)})();
