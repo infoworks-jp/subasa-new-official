@@ -15,12 +15,13 @@
 <script src="script.js"></script>
 <script>
 /* STEP 4 ONLY: emission amount. Keep STEP2 source, STEP3 color and all upstream fluid configuration unchanged.
-   Upstream creates random startup splats, so reset framebuffers once. Then emit fewer measured-source white splats,
-   with only sub-pixel micro drift so STEP4 changes amount without introducing STEP5 velocity tuning. */
+   Upstream queues random startup splats. Clear that queued emission and reset framebuffers once,
+   then emit fewer measured-source white splats with only sub-pixel micro drift. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
  const white={r:.15,g:.15,b:.15};
+ if(Array.isArray(splatStack)) splatStack.length=0;
  initFramebuffers();
  function fire(type,x,y){const r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent(type,{bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));}
  setTimeout(()=>{
@@ -34,7 +35,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,microDrift:true,onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,microDrift:true,onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
