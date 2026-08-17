@@ -24,6 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           test -s GITHUB_MANAGER.md
+          test -s reference/pavel-baseline.html
           test -s index.html
           test -s style.css
           test -s fluid-top.css
@@ -34,13 +35,14 @@ jobs:
           grep -q 'assets/tsubasa-logo.png' index.html
           grep -q 'data-effect="steam"' index.html
           grep -q '__tsubasaEffects' effects.js
-          grep -q '本家構造固定規約' GITHUB_MANAGER.md
-          grep -q '本家を勝手に簡略化しない' GITHUB_MANAGER.md
+          grep -q '外部基準実装を使用するWeb制作' GITHUB_MANAGER.md
+          grep -q 'REFERENCE BASELINE' GITHUB_MANAGER.md
+          grep -q '勝手に簡略化しない' GITHUB_MANAGER.md
+          grep -q 'paveldogreat.github.io/WebGL-Fluid-Simulation' reference/pavel-baseline.html
       - name: Reject simplified or fake steam architecture
         shell: bash
         run: |
           set -euo pipefail
-          # Required upstream-style fluid stages. Missing any one is a hard FAIL.
           grep -Eqi 'advection|advect' effects.js
           grep -Eqi 'divergence|diverg' effects.js
           grep -Eqi 'pressure|jacobi' effects.js
@@ -52,7 +54,6 @@ jobs:
           grep -Eqi 'velocity|vel' effects.js
           grep -Eqi 'density|dye' effects.js
           grep -Eqi 'webgl2|webgl' effects.js
-          # Explicitly reject the known shortcut that previously passed QA.
           if grep -q "webgl2-photographic-plume" effects.js; then echo 'FAIL: procedural plume shortcut is forbidden'; exit 1; fi
           if grep -q "gpu-fbm" effects.js; then echo 'FAIL: FBM-only smoke shortcut is forbidden'; exit 1; fi
       - name: Protect approved PNG logo
@@ -66,17 +67,92 @@ jobs:
       - name: Write contract receipt
         run: |
           mkdir -p manager
-          sha256sum index.html style.css fluid-top.css app.js effects.js assets/susukino-top.webp assets/tsubasa-logo.png GITHUB_MANAGER.md > manager/source-sha256.txt
-          printf 'commit=%s\nupstream_fluid_architecture=PASS\nstatus=CONTRACT_VERIFIED\n' "$GITHUB_SHA" > manager/contract.txt
+          sha256sum index.html style.css fluid-top.css app.js effects.js reference/pavel-baseline.html assets/susukino-top.webp assets/tsubasa-logo.png GITHUB_MANAGER.md > manager/source-sha256.txt
+          printf 'commit=%s\nreference_baseline_required=YES\nstatus=CONTRACT_VERIFIED\n' "$GITHUB_SHA" > manager/contract.txt
       - uses: actions/upload-artifact@v4
         with:
           name: manager-contract-${{ github.sha }}
           path: manager
           retention-days: 30
 
-  browser:
-    name: 2. Public browser / composite visual / performance
+  reference-baseline:
+    name: 2. Pavel REFERENCE BASELINE
     needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install baseline browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Capture and verify unmodified upstream behavior
+        shell: bash
+        run: |
+          cat > baseline.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import pixelmatch from 'pixelmatch';
+          import { PNG } from 'pngjs';
+          fs.mkdirSync('reference-evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const report={commit:process.env.GITHUB_SHA,reference:'https://paveldogreat.github.io/WebGL-Fluid-Simulation/',passed:true,cases:{}};
+          const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.04,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n};
+          for(const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]){
+            const errors=[];
+            const page=await browser.newPage({viewport:{width,height}});
+            page.on('pageerror',e=>errors.push(`pageerror:${e.message}`));
+            const url=`https://infoworks-jp.github.io/subasa-new-official/reference/pavel-baseline.html?qa=${process.env.GITHUB_SHA}-${Date.now()}`;
+            await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForTimeout(2500);
+            const frame=page.frames().find(f=>f.url().includes('paveldogreat.github.io/WebGL-Fluid-Simulation'));
+            if(!frame){errors.push('upstream-frame-missing');report.passed=false;report.cases[name]={errors};await page.close();continue;}
+            const canvas=frame.locator('canvas');
+            await canvas.waitFor({state:'visible',timeout:15000});
+            const box=await canvas.boundingBox();
+            if(!box||box.width<100||box.height<100)errors.push('upstream-canvas-invalid');
+            await page.screenshot({path:`reference-evidence/${name}-t0.png`});
+            await page.waitForTimeout(1000);
+            await page.screenshot({path:`reference-evidence/${name}-t1.png`});
+            await page.waitForTimeout(2000);
+            await page.screenshot({path:`reference-evidence/${name}-t3.png`});
+            const d01=diff(`reference-evidence/${name}-t0.png`,`reference-evidence/${name}-t1.png`,`reference-evidence/${name}-diff-01.png`);
+            const d13=diff(`reference-evidence/${name}-t1.png`,`reference-evidence/${name}-t3.png`,`reference-evidence/${name}-diff-13.png`);
+            if(d01<1000||d13<1000)errors.push(`upstream-natural-motion-too-low:${d01}/${d13}`);
+            let pointerDiff=-1;
+            if(name==='desktop'&&box){
+              const y=box.y+box.height*.52;
+              await page.mouse.move(box.x+box.width*.25,y);
+              await page.mouse.move(box.x+box.width*.75,y-80,{steps:24});
+              await page.mouse.move(box.x+box.width*.45,y+70,{steps:18});
+              await page.waitForTimeout(350);
+              await page.screenshot({path:`reference-evidence/${name}-pointer.png`});
+              pointerDiff=diff(`reference-evidence/${name}-t3.png`,`reference-evidence/${name}-pointer.png`,`reference-evidence/${name}-diff-pointer.png`);
+              if(pointerDiff<1000)errors.push(`upstream-pointer-response-too-low:${pointerDiff}`);
+            }
+            report.cases[name]={canvas:box,naturalDiff01:d01,naturalDiff13:d13,pointerDiff,errors};
+            if(errors.length)report.passed=false;
+            await page.close();
+          }
+          await browser.close();
+          fs.writeFileSync('reference-evidence/report.json',JSON.stringify(report,null,2));
+          if(!report.passed)process.exit(1);
+          JS
+          node baseline.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: REFERENCE-BASELINE-${{ github.sha }}
+          path: reference-evidence
+          retention-days: 90
+
+  browser:
+    name: 3. Public browser / composite visual / performance
+    needs: reference-baseline
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -107,15 +183,15 @@ jobs:
           retention-days: 30
 
   manager:
-    name: 3. GitHub manager verdict
-    needs: [contract, browser]
+    name: 4. GitHub manager verdict
+    needs: [contract, reference-baseline, browser]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Issue verified release verdict
         run: |
           mkdir -p manager-verdict
-          printf 'commit=%s\nupstream_fluid_architecture=PASS\npublic_browser_visual=PASS\nsteam_composite=PASS\nsteam_motion=PASS\nsteam_pointer=PASS\nscroll_performance=PASS\nmanager=PASS\nrelease=VERIFIED\n' "$GITHUB_SHA" | tee manager-verdict/VERDICT.txt
+          printf 'commit=%s\nreference_baseline=PASS\nupstream_fluid_architecture=PASS\npublic_browser_visual=PASS\nsteam_composite=PASS\nsteam_motion=PASS\nsteam_pointer=PASS\nscroll_performance=PASS\nmanager=PASS\nrelease=VERIFIED\n' "$GITHUB_SHA" | tee manager-verdict/VERDICT.txt
       - uses: actions/upload-artifact@v4
         with:
           name: VERIFIED-${{ github.sha }}
