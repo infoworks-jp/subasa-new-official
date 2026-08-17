@@ -1,0 +1,86 @@
+name: Pavel Migration STEP 5
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  step5-velocity-vorticity-diffusion:
+    name: STEP 5 / velocity vorticity diffusion only
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce STEP 5 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s reference/step4-emission-amount.html
+          test -s reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'X=.632,Y=.486' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'DYE_AMPLITUDE=.03' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'EMIT_INTERVAL_MS=150' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'UPWARD_FORCE=38' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'LATERAL_FORCE=7' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'DENSITY_DISSIPATION=1.25' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'VELOCITY_DISSIPATION=.18' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'CURL_STRENGTH=42' reference/step5-velocity-vorticity-diffusion.html
+          grep -q 'splat(sourceX,sourceY,dx,UPWARD_FORCE,white)' reference/step5-velocity-vorticity-diffusion.html
+          grep -q "onlyChange:'velocityVorticityDiffusion'" reference/step5-velocity-vorticity-diffusion.html
+          if grep -Eq 'config\.(SIM_RESOLUTION|DYE_RESOLUTION|PRESSURE|PRESSURE_ITERATIONS|SPLAT_RADIUS|SPLAT_FORCE|BLOOM|SUNRAYS)[[:space:]]*=' reference/step5-velocity-vorticity-diffusion.html; then echo 'FAIL: STEP5 changed a non-STEP5 parameter'; exit 1; fi
+          if grep -Eqi '(particle|bezier|fbm|noise|gif|video)' reference/step5-velocity-vorticity-diffusion.html; then echo 'FAIL: forbidden substitute detected'; exit 1; fi
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Capture STEP 5 evidence
+        shell: bash
+        run: |
+          cat > step5.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import pixelmatch from 'pixelmatch';
+          import { PNG } from 'pngjs';
+          fs.mkdirSync('step5-evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const report={commit:process.env.GITHUB_SHA,step:'STEP 5 velocity vorticity diffusion only',passed:true,cases:{}};
+          const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.035,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n};
+          const plumeStats=path=>{const P=PNG.sync.read(fs.readFileSync(path));let count=0,minX=P.width,maxX=-1,minY=P.height,maxY=-1,sumX=0,sumY=0,colored=0;for(let y=0;y<P.height;y++){for(let x=0;x<P.width;x++){const i=(y*P.width+x)*4,r=P.data[i],g=P.data[i+1],b=P.data[i+2],mx=Math.max(r,g,b),mn=Math.min(r,g,b);if(mx>10){count++;if(x<minX)minX=x;if(x>maxX)maxX=x;if(y<minY)minY=y;if(y>maxY)maxY=y;sumX+=x;sumY+=y;if(mx-mn>22)colored++;}}}return{count,minX,maxX,minY,maxY,width:maxX>=minX?maxX-minX+1:0,height:maxY>=minY?maxY-minY+1:0,centroidX:count?sumX/count:null,centroidY:count?sumY/count:null,coloredRatio:count?colored/count:0};};
+          const captureCanvasOnly=async(page,path)=>{await page.evaluate(()=>{const c=document.querySelector('canvas');document.body.style.background='#000';c.style.mixBlendMode='normal';c.style.background='#000';});await page.locator('canvas').screenshot({path});await page.evaluate(()=>{const c=document.querySelector('canvas');document.body.style.background='';c.style.mixBlendMode='';c.style.background='';});};
+          for(const [name,width,height] of [['desktop',1440,1100],['mobile',390,844]]){
+            const errors=[];const page=await browser.newPage({viewport:{width,height}});
+            page.on('console',m=>{if(m.type()==='error')errors.push('console:'+m.text().slice(0,180));});
+            await page.goto(`https://infoworks-jp.github.io/subasa-new-official/reference/step5-velocity-vorticity-diffusion.html?qa=${process.env.GITHUB_SHA}-${Date.now()}`,{waitUntil:'domcontentloaded',timeout:30000});
+            await page.waitForTimeout(2200);
+            const state=await page.evaluate(()=>window.__pavelMigrationStep5||null);
+            if(!state||state.onlyChange!=='velocityVorticityDiffusion'||state.dyeAmplitude!==.03||state.intervalMs!==150||state.upwardForce!==38||state.lateralForce!==7||state.densityDissipation!==1.25||state.velocityDissipation!==.18||state.curl!==42||state.upstreamSplat!==true)errors.push('step5-state-invalid');
+            await page.screenshot({path:`step5-evidence/${name}-t0.png`});await captureCanvasOnly(page,`step5-evidence/${name}-canvas-t0.png`);
+            await page.waitForTimeout(1400);await page.screenshot({path:`step5-evidence/${name}-t1.png`});await captureCanvasOnly(page,`step5-evidence/${name}-canvas-t1.png`);
+            await page.waitForTimeout(1900);await page.screenshot({path:`step5-evidence/${name}-t3.png`});await captureCanvasOnly(page,`step5-evidence/${name}-canvas-t3.png`);
+            const d01=diff(`step5-evidence/${name}-t0.png`,`step5-evidence/${name}-t1.png`,`step5-evidence/${name}-diff01.png`);const d13=diff(`step5-evidence/${name}-t1.png`,`step5-evidence/${name}-t3.png`,`step5-evidence/${name}-diff13.png`);
+            const p0=plumeStats(`step5-evidence/${name}-canvas-t0.png`),p1=plumeStats(`step5-evidence/${name}-canvas-t1.png`),p3=plumeStats(`step5-evidence/${name}-canvas-t3.png`);
+            const sourceScreenY=.511*height;const rise=sourceScreenY-p3.minY;const minRise=.035*height;const minHeight=.05*height;const motionMin=Math.max(25,Math.round(120*(width*height)/(1440*1100)));
+            if(d01<motionMin||d13<motionMin)errors.push(`motion-low:${d01}/${d13}<${motionMin}`);
+            if(p3.count<Math.max(30,Math.round(200*(width*height)/(1440*1100))))errors.push(`plume-too-small:${p3.count}`);
+            if(rise<minRise)errors.push(`not-rising:${rise.toFixed(1)}<${minRise.toFixed(1)}`);
+            if(p3.height<minHeight)errors.push(`vertical-span-low:${p3.height}<${minHeight.toFixed(1)}`);
+            if(p3.height<=p3.width*.95)errors.push(`disk-or-horizontal:${p3.width}x${p3.height}`);
+            if(p3.coloredRatio>.04)errors.push(`non-white-fluid:${p3.coloredRatio}`);
+            report.cases[name]={state,sourceScreenY,motionMin,diff01:d01,diff13:d13,rise,minRise,minHeight,plumeT0:p0,plumeT1:p1,plumeT3:p3,errors};if(errors.length)report.passed=false;await page.close();
+          }
+          await browser.close();fs.writeFileSync('step5-evidence/report.json',JSON.stringify(report,null,2));if(!report.passed)process.exit(1);
+          JS
+          node step5.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PAVEL-MIGRATION-STEP5-${{ github.sha }}
+          path: step5-evidence
+          retention-days: 90
