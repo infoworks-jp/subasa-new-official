@@ -1,1 +1,1 @@
-(()=>{const mobile=matchMedia('(max-width:700px)').matches;const s=document.createElement('script');s.src=mobile?'steam-mobile-fallback.js?v=mobile-steam-2':'effects.js?v=desktop-steam-2';document.body.appendChild(s)})();
+(()=>{const mobile=matchMedia('(max-width:700px)').matches;const s=document.createElement('script');s.src=mobile?'steam-webgl-mobile.js?v=steam-gpu-1':'effects.js?v=desktop-steam-3';document.body.appendChild(s)})();
