@@ -16,8 +16,8 @@
 <script>
 /* STEP 5 ONLY: velocity, vorticity and diffusion.
    Keep STEP4 source X=.632/Y=.486, neutral-white dye amplitude .03 and 150ms emission cadence.
-   Trial 14/2.5/2.2/.55/32 still measured 232px wide on the 390px mobile canvas and formed a mushroom cap.
-   This trial reduces momentum/curl and increases dye/velocity dissipation to keep the upstream fluid as a narrow rising plume. */
+   The previous 10/1.2/3.2/1.0/24 trial passed numeric geometry but visual inspection still showed a rounded mushroom cap.
+   Change only the upstream splat radius from its default .25 to .04 to seed a thinner fluid strand; all other STEP5 values stay fixed. */
 (()=>{
  const X=.632,Y=.486;
  const SOURCE_SCREEN_Y=Y+.025;
@@ -29,12 +29,14 @@
  const DENSITY_DISSIPATION=3.2;
  const VELOCITY_DISSIPATION=1.0;
  const CURL_STRENGTH=24;
+ const SPLAT_RADIUS=.04;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
 
  config.COLORFUL=false;
  config.DENSITY_DISSIPATION=DENSITY_DISSIPATION;
  config.VELOCITY_DISSIPATION=VELOCITY_DISSIPATION;
  config.CURL=CURL_STRENGTH;
+ config.SPLAT_RADIUS=SPLAT_RADIUS;
  if(Array.isArray(splatStack)) splatStack.length=0;
 
  function clearFBO(target){
@@ -76,6 +78,7 @@
    densityDissipation:DENSITY_DISSIPATION,
    velocityDissipation:VELOCITY_DISSIPATION,
    curl:CURL_STRENGTH,
+   splatRadius:SPLAT_RADIUS,
    upstreamSplat:true,
    explicitFramebufferZero:true,
    visualFilter:'none',
