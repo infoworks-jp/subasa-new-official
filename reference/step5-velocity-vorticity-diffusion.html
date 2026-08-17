@@ -16,19 +16,19 @@
 <script>
 /* STEP 5 ONLY: velocity, vorticity and diffusion.
    Keep STEP4 source X=.632/Y=.486, neutral-white dye amplitude .03 and 150ms emission cadence.
-   Previous STEP5 trial (upward 38, lateral 7, curl 42, density 1.25, velocity .18) expanded into an oversized cloud.
-   This trial reduces injected momentum and increases dissipation while retaining PavelDoGreat's own splat() and solver. */
+   Trial 14/2.5/2.2/.55/32 still measured 232px wide on the 390px mobile canvas and formed a mushroom cap.
+   This trial reduces momentum/curl and increases dye/velocity dissipation to keep the upstream fluid as a narrow rising plume. */
 (()=>{
  const X=.632,Y=.486;
  const SOURCE_SCREEN_Y=Y+.025;
  const SOURCE_FLUID_Y=1-SOURCE_SCREEN_Y;
  const DYE_AMPLITUDE=.03;
  const EMIT_INTERVAL_MS=150;
- const UPWARD_FORCE=14;
- const LATERAL_FORCE=2.5;
- const DENSITY_DISSIPATION=2.2;
- const VELOCITY_DISSIPATION=.55;
- const CURL_STRENGTH=32;
+ const UPWARD_FORCE=10;
+ const LATERAL_FORCE=1.2;
+ const DENSITY_DISSIPATION=3.2;
+ const VELOCITY_DISSIPATION=1.0;
+ const CURL_STRENGTH=24;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
 
  config.COLORFUL=false;
@@ -54,9 +54,9 @@
  let i=0;
  let timer=null;
  function emitSteam(){
-   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*.8;
-   const sourceX=X + Math.sin(i*.31)*.0015;
-   const sourceY=SOURCE_FLUID_Y + Math.sin(i*.23)*.0010;
+   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*.45;
+   const sourceX=X + Math.sin(i*.31)*.0012;
+   const sourceY=SOURCE_FLUID_Y + Math.sin(i*.23)*.0008;
    splat(sourceX,sourceY,dx,UPWARD_FORCE,white);
    i++;
  }
