@@ -14,13 +14,14 @@
 <canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
 <script src="script.js"></script>
 <script>
-/* STEP 4 ONLY: emission amount. Keep corrected STEP3 rendering and all upstream fluid configuration unchanged.
-   Remove only the upstream random startup emission. initFramebuffers() preserves existing dye/velocity,
-   therefore STEP4 must explicitly zero the already-created GPU framebuffers before measured-source emission. */
+/* STEP 4 ONLY: emission amount. Keep corrected STEP3 hue, source and all upstream fluid configuration unchanged.
+   STEP3 used neutral white at amplitude .15. STEP4 changes only emitted dye amount to .018 because .15
+   saturates the upstream default splat radius into an opaque white disk. Fluid physics remain untouched. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
- const white={r:.15,g:.15,b:.15};
+ const DYE_AMPLITUDE=.018;
+ const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
  if(Array.isArray(splatStack)) splatStack.length=0;
 
  function clearFBO(target){
@@ -49,7 +50,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',dyeAmplitude:DYE_AMPLITUDE,previousDyeAmplitude:.15,intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
