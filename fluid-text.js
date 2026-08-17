@@ -36,9 +36,9 @@ if(!('gpu' in navigator)){
     const scene=new Scene(),camera=new PerspectiveCamera(CAMERA_FOV,1,.1,100);camera.position.set(0,0,CAMERA_Z);camera.updateMatrixWorld(true);
     const loader=new TextureLoader();const slideTexture=await loader.loadAsync(slidePath);slideTexture.colorSpace=SRGBColorSpace;slideTexture.minFilter=LinearFilter;slideTexture.magFilter=LinearFilter;
     const bgMaterial=new MeshBasicMaterial({map:slideTexture,toneMapped:false}),bgMesh=new Mesh(new PlaneGeometry(1,1),bgMaterial);scene.add(bgMesh);
-    const fluid=new FluidSimulation(renderer,{profile:mobile?'performance':'balanced',splatRadius:.00042,splatForce:7,pressureIterations:mobile?6:10,curlStrength:.18,velocityDissipation:.99,densityDissipation:.94,pressureDissipation:.8,enableVorticity:false,bfecc:true,reflectWalls:false});
+    const fluid=new FluidSimulation(renderer,{profile:mobile?'performance':'balanced',splatRadius:mobile?.00086:.00105,splatForce:mobile?11:14,pressureIterations:mobile?6:10,curlStrength:.18,velocityDissipation:.99,densityDissipation:.94,pressureDissipation:.8,enableVorticity:false,bfecc:true,reflectWalls:false});
     fluid.enableDye=true;fluid.dyeDissipation=.965;
-    const distortionIntensity=uniform(.45),overlayIntensity=uniform(.85),overlayOpacity=uniform(.50),overlayVelocityScale=uniform(1),elapsedTime=uniform(0),dyeTexel=uniform(new Vector2(1/512,1/512)),cursorColor=uniform(new Color(.85,.95,1)),vibrance=uniform(.50);
+    const distortionIntensity=uniform(mobile?.68:.78),overlayIntensity=uniform(mobile?1.05:1.18),overlayOpacity=uniform(mobile?.58:.64),overlayVelocityScale=uniform(mobile?1.25:1.45),elapsedTime=uniform(0),dyeTexel=uniform(new Vector2(1/512,1/512)),cursorColor=uniform(new Color(.85,.95,1)),vibrance=uniform(.56);
     const scenePass=pass(scene,camera);let output=simpleDistortion(scenePass,fluid.densityNode,distortionIntensity);output=fluidOverlay('artInk',output,fluid.densityNode,fluid.dyeNode,fluid.velocityNode,{intensity:overlayIntensity,opacity:overlayOpacity,time:elapsedTime,texel:dyeTexel,cursorColor,vibrance,velocityScale:overlayVelocityScale});
     const pipeline=new RenderPipeline(renderer);pipeline.outputNode=output;pipeline.needsUpdate=true;
     const detachPointerSplats=attachPointerSplats(renderer.domElement,fluid,{coloredStrokes:true});
