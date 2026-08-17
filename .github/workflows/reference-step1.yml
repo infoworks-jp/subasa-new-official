@@ -1,0 +1,70 @@
+name: Pavel Migration STEP 1
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  step1-photo-overlay:
+    name: STEP 1 / target photo overlay without fluid changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Enforce STEP 1 contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s reference/pavel-baseline.html
+          test -s reference/step1-photo-overlay.html
+          grep -q 'paveldogreat.github.io/WebGL-Fluid-Simulation' reference/pavel-baseline.html
+          grep -q 'paveldogreat.github.io/WebGL-Fluid-Simulation' reference/step1-photo-overlay.html
+          grep -q "assets/tsubasa-ramen.webp" reference/step1-photo-overlay.html
+          grep -q 'mix-blend-mode:screen' reference/step1-photo-overlay.html
+      - name: Install browser QA
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --silent playwright@1.55.0 pixelmatch@7.1.0 pngjs@7.0.0
+          npx playwright install --with-deps chromium
+      - name: Verify upstream fluid survives photo overlay
+        shell: bash
+        run: |
+          cat > step1.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'fs';
+          import pixelmatch from 'pixelmatch';
+          import { PNG } from 'pngjs';
+          fs.mkdirSync('step1-evidence',{recursive:true});
+          const browser=await chromium.launch({headless:true});
+          const report={commit:process.env.GITHUB_SHA,step:'STEP 1 target photo overlay; upstream settings unchanged',passed:true,cases:{}};
+          const diff=(a,b,out)=>{const A=PNG.sync.read(fs.readFileSync(a)),B=PNG.sync.read(fs.readFileSync(b));const D=new PNG({width:A.width,height:A.height});const n=pixelmatch(A.data,B.data,D.data,A.width,A.height,{threshold:.04,includeAA:true});fs.writeFileSync(out,PNG.sync.write(D));return n};
+          for(const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]){
+            const errors=[];const page=await browser.newPage({viewport:{width,height}});
+            const url=`https://infoworks-jp.github.io/subasa-new-official/reference/step1-photo-overlay.html?qa=${process.env.GITHUB_SHA}-${Date.now()}`;
+            await page.goto(url,{waitUntil:'domcontentloaded',timeout:30000});await page.waitForTimeout(2500);
+            const bg=await page.locator('.stage').evaluate(el=>getComputedStyle(el).backgroundImage);
+            if(!bg.includes('tsubasa-ramen.webp'))errors.push('target-photo-not-loaded');
+            const frame=page.frames().find(f=>f.url().includes('paveldogreat.github.io/WebGL-Fluid-Simulation'));
+            if(!frame){errors.push('upstream-frame-missing');report.passed=false;report.cases[name]={errors};await page.close();continue;}
+            const canvas=frame.locator('canvas');await canvas.waitFor({state:'visible',timeout:15000});const box=await canvas.boundingBox();
+            await page.screenshot({path:`step1-evidence/${name}-t0.png`});await page.waitForTimeout(1000);await page.screenshot({path:`step1-evidence/${name}-t1.png`});await page.waitForTimeout(2000);await page.screenshot({path:`step1-evidence/${name}-t3.png`});
+            const d01=diff(`step1-evidence/${name}-t0.png`,`step1-evidence/${name}-t1.png`,`step1-evidence/${name}-diff-01.png`);const d13=diff(`step1-evidence/${name}-t1.png`,`step1-evidence/${name}-t3.png`,`step1-evidence/${name}-diff-13.png`);
+            if(d01<1000||d13<1000)errors.push(`fluid-motion-lost:${d01}/${d13}`);
+            let pointerDiff=-1;if(name==='desktop'&&box){await page.mouse.move(box.x+box.width*.25,box.y+box.height*.55);await page.mouse.move(box.x+box.width*.75,box.y+box.height*.40,{steps:24});await page.mouse.move(box.x+box.width*.42,box.y+box.height*.68,{steps:18});await page.waitForTimeout(350);await page.screenshot({path:`step1-evidence/${name}-pointer.png`});pointerDiff=diff(`step1-evidence/${name}-t3.png`,`step1-evidence/${name}-pointer.png`,`step1-evidence/${name}-diff-pointer.png`);if(pointerDiff<1000)errors.push(`pointer-fluid-response-lost:${pointerDiff}`)}
+            report.cases[name]={canvas:box,naturalDiff01:d01,naturalDiff13:d13,pointerDiff,errors};if(errors.length)report.passed=false;await page.close();
+          }
+          await browser.close();fs.writeFileSync('step1-evidence/report.json',JSON.stringify(report,null,2));if(!report.passed)process.exit(1);
+          JS
+          node step1.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: PAVEL-MIGRATION-STEP1-${{ github.sha }}
+          path: step1-evidence
+          retention-days: 90
