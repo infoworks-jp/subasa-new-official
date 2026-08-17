@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
+<title>STEP 6 — pointer interaction only</title>
+<script src="dat.gui.min.js"></script>
+<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen;touch-action:none}.dg,.promo{display:none!important}</style>
+<script>window.ga=function(){};</script>
+</head>
+<body>
+<canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
+<script src="script.js"></script>
+<script>
+/* STEP 6 ONLY: pointer interaction.
+   Preserve the STEP5 source, dye amount, cadence, velocity, vorticity, dissipation and splat radius.
+   Pointer movement injects velocity only through PavelDoGreat's own splat(); pointer dye is exactly zero. */
+(()=>{
+ const c=document.querySelector('canvas');
+ const X=.632,Y=.486;
+ const SOURCE_SCREEN_Y=Y+.025;
+ const SOURCE_FLUID_Y=1-SOURCE_SCREEN_Y;
+ const DYE_AMPLITUDE=.03;
+ const EMIT_INTERVAL_MS=150;
+ const UPWARD_FORCE=10;
+ const LATERAL_FORCE=1.2;
+ const DENSITY_DISSIPATION=3.2;
+ const VELOCITY_DISSIPATION=1.0;
+ const CURL_STRENGTH=24;
+ const SPLAT_RADIUS=.04;
+ const POINTER_RADIUS=.12;
+ const POINTER_FORCE=1700;
+ const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
+ const noDye={r:0,g:0,b:0};
+
+ config.COLORFUL=false;
+ config.DENSITY_DISSIPATION=DENSITY_DISSIPATION;
+ config.VELOCITY_DISSIPATION=VELOCITY_DISSIPATION;
+ config.CURL=CURL_STRENGTH;
+ config.SPLAT_RADIUS=SPLAT_RADIUS;
+ if(Array.isArray(splatStack)) splatStack.length=0;
+
+ function clearFBO(target){
+   if(!target||!target.fbo)return;
+   gl.bindFramebuffer(gl.FRAMEBUFFER,target.fbo);
+   gl.viewport(0,0,target.width,target.height);
+   gl.clearColor(0,0,0,0);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+ }
+ function zeroFluidState(){
+   [dye?.read,dye?.write,velocity?.read,velocity?.write,pressure?.read,pressure?.write,divergence,curl].forEach(clearFBO);
+   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+   gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);
+ }
+ zeroFluidState();
+
+ let i=0;
+ function emitSteam(){
+   const dx=Math.sin(i*.47)*LATERAL_FORCE + Math.sin(i*.19)*.45;
+   const sourceX=X + Math.sin(i*.31)*.0012;
+   const sourceY=SOURCE_FLUID_Y + Math.sin(i*.23)*.0008;
+   splat(sourceX,sourceY,dx,UPWARD_FORCE,white);
+   i++;
+ }
+ setTimeout(()=>{emitSteam();setInterval(emitSteam,EMIT_INTERVAL_MS);},1800);
+
+ let last=null;
+ let pointerSplats=0;
+ function stir(clientX,clientY){
+   const r=c.getBoundingClientRect();
+   if(!r.width||!r.height)return;
+   const x=(clientX-r.left)/r.width;
+   const y=1-(clientY-r.top)/r.height;
+   if(x<0||x>1||y<0||y>1){last=null;return;}
+   if(!last){last={x:clientX,y:clientY};return;}
+   const dx=(clientX-last.x)/r.width;
+   const dy=-(clientY-last.y)/r.height;
+   last={x:clientX,y:clientY};
+   const magnitude=Math.hypot(dx,dy);
+   if(magnitude<.0004)return;
+   const vx=Math.max(-90,Math.min(90,dx*POINTER_FORCE));
+   const vy=Math.max(-90,Math.min(90,dy*POINTER_FORCE));
+   const savedRadius=config.SPLAT_RADIUS;
+   config.SPLAT_RADIUS=POINTER_RADIUS;
+   splat(x,y,vx,vy,noDye);
+   config.SPLAT_RADIUS=savedRadius;
+   pointerSplats++;
+ }
+ c.addEventListener('pointermove',e=>stir(e.clientX,e.clientY),{passive:true});
+ c.addEventListener('pointerleave',()=>{last=null;},{passive:true});
+
+ window.__pavelMigrationStep6={
+   source:{x:X,y:Y},
+   dyeAmplitude:DYE_AMPLITUDE,
+   intervalMs:EMIT_INTERVAL_MS,
+   upwardForce:UPWARD_FORCE,
+   lateralForce:LATERAL_FORCE,
+   densityDissipation:DENSITY_DISSIPATION,
+   velocityDissipation:VELOCITY_DISSIPATION,
+   curl:CURL_STRENGTH,
+   splatRadius:SPLAT_RADIUS,
+   pointerRadius:POINTER_RADIUS,
+   pointerForce:POINTER_FORCE,
+   pointerAddsDye:false,
+   upstreamSplat:true,
+   get pointerSplats(){return pointerSplats;},
+   onlyChange:'pointerInteraction'
+ };
+})();
+</script>
+</body>
+</html>
