@@ -1,1 +1,1 @@
-(()=>{const s=document.createElement('script');s.src='effects.js?v=mobile-steam-align-4';document.body.appendChild(s)})();
+(()=>{const mobile=matchMedia('(max-width:700px)').matches;const s=document.createElement('script');s.src=mobile?'steam-mobile-wispy.js?v=2':'effects.js?v=desktop-fluid-5';document.body.appendChild(s)})();
