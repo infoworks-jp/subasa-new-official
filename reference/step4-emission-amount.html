@@ -7,16 +7,15 @@
 <base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
 <title>STEP 4 — emission amount only</title>
 <script src="dat.gui.min.js"></script>
-<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen;filter:grayscale(1) brightness(1.35)}.dg,.promo{display:none!important}</style>
+<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen}.dg,.promo{display:none!important}</style>
 <script>window.ga=function(){};</script>
 </head>
 <body>
 <canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
 <script src="script.js"></script>
 <script>
-/* STEP 4 ONLY: emission amount. Keep STEP2 source, STEP3 color and all upstream fluid configuration unchanged.
-   Upstream queues random startup splats. Clear that queued emission and reset framebuffers once,
-   then emit fewer measured-source white splats with only sub-pixel micro drift. */
+/* STEP 4 ONLY: emission amount. Keep corrected STEP3 rendering and all upstream fluid configuration unchanged.
+   Remove only the upstream random startup emission, then emit fewer measured-source white splats. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
@@ -35,7 +34,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,microDrift:true,onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
