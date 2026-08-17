@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
+<title>STEP 2 — measured steam source position</title>
+<script src="dat.gui.min.js"></script>
+<style>
+*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen}.dg{display:none!important}.promo{display:none!important}
+</style>
+<script>window.ga=function(){};</script>
+</head>
+<body>
+<canvas></canvas>
+<div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
+<script src="script.js"></script>
+<script>
+/* STEP 2 ONLY: measured source position from 1440x1100 composite.
+   Steam visible bottom region: x≈865..950, y≈520..545.
+   Source center selected: X=910/1440=0.632, Y=535/1100=0.486.
+   No fluid solver/configuration values are changed here. Only pointer input position is controlled. */
+(()=>{
+  const c=document.querySelector('canvas');
+  const X=.632,Y=.486;
+  function fire(type,x,y){const r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent(type,{bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));}
+  setTimeout(()=>{
+    fire('mousedown',X,Y+.025);
+    let i=0;
+    setInterval(()=>{
+      const sway=Math.sin(i*.31)*.012;
+      const lift=(i%10)*.0035;
+      fire('mousemove',X+sway,Y+.025-lift);
+      i++;
+    },70);
+  },1800);
+  window.__pavelMigrationStep2={source:{x:X,y:Y},measuredFrom:{width:1440,height:1100,xPx:910,yPx:535},fluidSettingsChanged:false};
+})();
+</script>
+</body>
+</html>
