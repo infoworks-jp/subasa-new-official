@@ -15,13 +15,28 @@
 <script src="script.js"></script>
 <script>
 /* STEP 4 ONLY: emission amount. Keep corrected STEP3 rendering and all upstream fluid configuration unchanged.
-   Remove only the upstream random startup emission, then emit fewer measured-source white splats. */
+   Remove only the upstream random startup emission. initFramebuffers() preserves existing dye/velocity,
+   therefore STEP4 must explicitly zero the already-created GPU framebuffers before measured-source emission. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
  const white={r:.15,g:.15,b:.15};
  if(Array.isArray(splatStack)) splatStack.length=0;
- initFramebuffers();
+
+ function clearFBO(target){
+   if(!target||!target.fbo)return;
+   gl.bindFramebuffer(gl.FRAMEBUFFER,target.fbo);
+   gl.viewport(0,0,target.width,target.height);
+   gl.clearColor(0,0,0,0);
+   gl.clear(gl.COLOR_BUFFER_BIT);
+ }
+ function zeroFluidState(){
+   [dye?.read,dye?.write,velocity?.read,velocity?.write,pressure?.read,pressure?.write,divergence,curl].forEach(clearFBO);
+   gl.bindFramebuffer(gl.FRAMEBUFFER,null);
+   gl.viewport(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight);
+ }
+ zeroFluidState();
+
  function fire(type,x,y){const r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent(type,{bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));}
  setTimeout(()=>{
    fire('mousedown',X,Y+.025);
@@ -34,7 +49,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
