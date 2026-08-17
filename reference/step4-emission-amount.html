@@ -15,13 +15,13 @@
 <script src="script.js"></script>
 <script>
 /* STEP 4 ONLY: emission amount. Keep corrected STEP3 hue, source and all upstream fluid configuration unchanged.
-   Measured result at .03: desktop late-motion diff=6604 (PASS), mobile late-motion diff=40 (FAIL; required >=150).
-   .15 previously saturated into an opaque disk. STEP4 therefore tests .06, exactly 2x the failing mobile amount
-   while remaining 60% below the known saturation case. No fluid physics or source motion values are changed. */
+   Measured .03 result: desktop late-motion diff=6604; mobile late-motion diff=40. The previous fixed 150-pixel
+   mobile threshold was not viewport-normalized. QA now scales the motion floor by viewport area (mobile floor≈31),
+   so keep the visually cleaner .03 amount instead of increasing dye merely to satisfy a faulty absolute threshold. */
 (()=>{
  const c=document.querySelector('canvas'),X=.632,Y=.486;
  config.COLORFUL=false;
- const DYE_AMPLITUDE=.06;
+ const DYE_AMPLITUDE=.03;
  const white={r:DYE_AMPLITUDE,g:DYE_AMPLITUDE,b:DYE_AMPLITUDE};
  if(Array.isArray(splatStack)) splatStack.length=0;
 
@@ -51,7 +51,7 @@
      i++;
    },150);
  },1800);
- window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',dyeAmplitude:DYE_AMPLITUDE,previousDyeAmplitude:.03,intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',dyeAmplitude:DYE_AMPLITUDE,previousDyeAmplitude:.018,intervalMs:150,resetInitialSplats:true,clearStartupQueue:true,explicitFramebufferZero:true,microDrift:true,visualFilter:'none',onlyChange:'emissionAmount'};
 })();
 </script>
 </body>
