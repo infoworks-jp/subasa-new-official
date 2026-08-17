@@ -1,1 +1,1 @@
-(()=>{const mobile=matchMedia('(max-width:700px)').matches;const s=document.createElement('script');s.src=mobile?'steam-mobile-wispy.js?v=2':'effects.js?v=desktop-fluid-5';document.body.appendChild(s)})();
+(()=>{const s=document.createElement('script');s.src='effects.js?v=natural-fluid-6';document.body.appendChild(s)})();
