@@ -1,1 +1,0 @@
-(()=>{window.__tsubasaSetPatch={loaded:false,removed:true};})();
