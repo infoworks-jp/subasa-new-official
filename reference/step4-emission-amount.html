@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
+<title>STEP 4 — emission amount only</title>
+<script src="dat.gui.min.js"></script>
+<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen;filter:grayscale(1) brightness(1.35)}.dg,.promo{display:none!important}</style>
+<script>window.ga=function(){};</script>
+</head>
+<body>
+<canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
+<script src="script.js"></script>
+<script>
+/* STEP 4 ONLY: emission amount. Keep STEP2 source, STEP3 color and all upstream fluid configuration unchanged.
+   Upstream creates 5–24 random startup splats. Resetting framebuffers removes only that startup emission,
+   then the same 70ms measured-source white pointer stream from STEP3 is used unchanged. */
+(()=>{
+ const c=document.querySelector('canvas'),X=.632,Y=.486;
+ config.COLORFUL=false;
+ const white={r:.15,g:.15,b:.15};
+ initFramebuffers();
+ function fire(type,x,y){const r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent(type,{bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));}
+ setTimeout(()=>{fire('mousedown',X,Y+.025);let i=0;setInterval(()=>{pointers[0].color=white;const sway=Math.sin(i*.31)*.012,lift=(i%10)*.0035;fire('mousemove',X+sway,Y+.025-lift);i++;},70);},1800);
+ window.__pavelMigrationStep4={source:{x:X,y:Y},color:'neutral-white',intervalMs:70,resetInitialSplats:true,onlyChange:'emissionAmount'};
+})();
+</script>
+</body>
+</html>
