@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<base href="https://cdn.jsdelivr.net/gh/PavelDoGreat/WebGL-Fluid-Simulation@master/">
+<title>STEP 3 — white steam color only</title>
+<script src="dat.gui.min.js"></script>
+<style>*{user-select:none}html,body{overflow:hidden;background:#000}body{margin:0;position:fixed;width:100%;height:100%;background:#000 url('https://infoworks-jp.github.io/subasa-new-official/assets/tsubasa-ramen.webp') center/cover no-repeat}canvas{width:100%;height:100%;mix-blend-mode:screen}.dg,.promo{display:none!important}</style>
+<script>window.ga=function(){};</script>
+</head>
+<body>
+<canvas></canvas><div class="promo"><span class="promo-close">×</span><a id="apple_link"></a><a id="google_link"></a></div>
+<script src="script.js"></script>
+<script>
+/* STEP 3 ONLY: keep STEP2 source coordinates; change emitted dye color to neutral white. */
+(()=>{
+ const c=document.querySelector('canvas'),X=.632,Y=.486;
+ config.COLORFUL=false;
+ const white={r:.15,g:.15,b:.15};
+ function fire(type,x,y){const r=c.getBoundingClientRect();c.dispatchEvent(new MouseEvent(type,{bubbles:true,clientX:r.left+r.width*x,clientY:r.top+r.height*y}));}
+ setTimeout(()=>{fire('mousedown',X,Y+.025);let i=0;setInterval(()=>{pointers[0].color=white;const sway=Math.sin(i*.31)*.012,lift=(i%10)*.0035;fire('mousemove',X+sway,Y+.025-lift);i++;},70);},1800);
+ window.__pavelMigrationStep3={source:{x:X,y:Y},color:'neutral-white',colorValue:white,onlyChange:'color'};
+})();
+</script>
+</body>
+</html>
