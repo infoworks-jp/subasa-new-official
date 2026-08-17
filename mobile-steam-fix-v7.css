@@ -1,7 +1,7 @@
 @media(max-width:700px){
   .signature-miso .steam-miso,
   .signature-tsubasa .steam-tsubasa-a,
-  .signature-tsubasa .steam-tsubasa-b{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;transform:none!important;filter:none!important;opacity:.72!important;mix-blend-mode:screen!important;}
+  .signature-tsubasa .steam-tsubasa-b{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;transform:none!important;filter:none!important;opacity:.46!important;mix-blend-mode:screen!important;}
   .signature-tsubasa .media{object-fit:cover!important;object-position:50% 41%!important;transform:scale(1.16)!important;transform-origin:50% 41%!important;}
-  .hero .mobile-fluid-fallback{mix-blend-mode:screen!important;opacity:.70!important;}
+  .hero .mobile-fluid-fallback{mix-blend-mode:screen!important;opacity:.52!important;}
 }
