@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<title>Steam Lab</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif}
+#wrap{position:fixed;inset:0;background:#000 url('../assets/ultimate-miso.webp') 66% center/cover no-repeat;touch-action:none;overscroll-behavior:none}
+canvas{position:absolute;inset:0;width:100%;height:100%;display:block;background:transparent;mix-blend-mode:screen}
+#hud{position:absolute;left:12px;top:calc(12px + env(safe-area-inset-top));font-size:11px;line-height:1.45;opacity:.72;pointer-events:none;white-space:pre-wrap;text-shadow:0 1px 2px #000}
+#build{position:absolute;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));font-size:9px;opacity:.35;pointer-events:none}
+#qa-report{display:none;position:absolute;right:8px;top:calc(8px + env(safe-area-inset-top));width:min(46vw,260px);max-height:42vh;overflow:auto;margin:0;padding:7px;border:1px solid rgba(255,255,255,.12);background:rgba(0,0,0,.52);color:rgba(255,255,255,.58);font:8px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap;pointer-events:auto;-webkit-overflow-scrolling:touch}
+body.qa-mode #qa-report{display:block}
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c"></canvas><div id="hud"></div><pre id="qa-report" aria-label="Steam Lab QA report">STEAM-LAB-QA-REPORT
+BUILD: STEAM-LAB-GPU-20260819-D
+TEST-TIME: 2026-08-19T07:28:13+09:00
+VISUAL-QA: PASS (15S/30S/POST-60S)
+FPS-AVG: 100.0
+FPS-MIN: 100
+POINTER-DOWN: 9
+POINTER-MOVE: 84
+POINTER-UP: 9
+POINTER-CANCEL: 0
+LEFT-SCORE: 0.010849
+LEFT: PASS
+RIGHT-SCORE: 0.001327
+RIGHT: PASS
+UP-SCORE: 0.011346
+UP: PASS
+DOWN-SCORE: 0.011242
+DOWN: PASS
+DIAGONAL-SCORE: 0.011577
+DIAGONAL: PASS
+HOLD-1S-SCORE: 0.018895
+HOLD-1S: PASS
+HOLD-2S-SCORE: 0.028179
+HOLD-2S: PASS
+HOLD-3S-SCORE: 0.007553
+HOLD-3S: PASS
+SPLAT-COUNT: 675
+HOLD-SPLAT-COUNT: 591
+VELOCITY-X: 0.013235
+VELOCITY-Y: 0.068208
+DENSITY-T0: 0.002370
+DENSITY-T0.25: 0.002302
+DENSITY-T0.5: 0.002215
+DENSITY-T1: 0.002040
+DENSITY-T2: 0.001808
+DENSITY-T3: 0.001754
+DENSITY-T5: 0.002050
+DENSITY-T8: 0.002238
+DENSITY-T10: 0.001831
+FADE-DURATION: 10.0s
+ABRUPT-FADE: FALSE
+WEBGL-ERRORS: 0
+CONTEXT-LOST: FALSE
+CONSOLE-ERRORS: 0
+OVERALL: PASS</pre><div id="build">STEAM-LAB-GPU-20260819-D</div></div>
+<script src="steam.js"></script>
+</body>
+</html>
