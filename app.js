@@ -13,6 +13,9 @@ for(const panel of document.querySelectorAll('.menu-panel')){const lang=panel.da
 const dialog=document.querySelector('#menuDialog'),img=document.querySelector('#menuImage'),label=document.querySelector('#menuLabel');
 document.querySelectorAll('[data-menu]').forEach(b=>b.addEventListener('click',()=>{img.hidden=false;img.src=b.dataset.menu;img.alt=b.dataset.label||'';label.textContent=b.dataset.label||'';dialog.showModal()}));
 if(dialog){dialog.querySelector('.close').onclick=()=>dialog.close();dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()})}
+const cmDialog=document.querySelector('#cmDialog'),cmVideo=document.querySelector('#cmVideo'),openCm=document.querySelector('#openCm');
+const closeCm=()=>{if(!cmDialog)return;cmVideo?.pause();if(cmVideo)cmVideo.currentTime=0;cmDialog.close()};
+if(cmDialog&&cmVideo&&openCm){openCm.addEventListener('click',async()=>{cmDialog.showModal();cmVideo.currentTime=0;try{await cmVideo.play()}catch(_){/* controls remain available when sound autoplay is blocked */}});cmDialog.querySelector('.cm-close')?.addEventListener('click',closeCm);cmDialog.addEventListener('click',e=>{if(e.target===cmDialog)closeCm()});cmDialog.addEventListener('close',()=>{cmVideo.pause();cmVideo.currentTime=0})}
 const tabs=[...document.querySelectorAll('.menu-tab')],panels=[...document.querySelectorAll('.menu-panel')];tabs.forEach(tab=>tab.addEventListener('click',()=>{const lang=tab.dataset.lang;tabs.forEach(t=>t.classList.toggle('active',t===tab));panels.forEach(p=>p.classList.toggle('active',p.dataset.panel===lang))}));
 window.__tsubasaMenu={source:'2026 product master + official menu sheets',itemCount:MENU.ja.length,languages:Object.keys(MENU)};
 })();
