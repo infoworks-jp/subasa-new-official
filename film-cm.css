@@ -103,9 +103,11 @@
 }
 
 .cm-dialog {
-  width: auto;
+  width: min(92vw, calc(86vh * 9 / 16), 506px);
   max-width: none;
   max-height: none;
+  margin: auto;
+  padding: 0;
   border: 0;
   background: transparent;
   overflow: visible;
@@ -130,7 +132,8 @@
 }
 
 .cm-video-wrap {
-  height: min(86vh, 900px);
+  width: 100%;
+  height: auto;
   aspect-ratio: 9 / 16;
   background: #000;
   box-shadow: 0 22px 80px rgba(0,0,0,.7);
@@ -182,7 +185,8 @@
   }
 
   .cm-open b { font-size: 20px; }
-  .cm-video-wrap { height: auto; width: min(92vw, 430px); aspect-ratio: 9 / 16; }
+  .cm-dialog { width: min(92vw, calc(90vh * 9 / 16), 430px); }
+  .cm-video-wrap { width: 100%; height: auto; aspect-ratio: 9 / 16; }
   .cm-close { right: 6px; top: 6px; background: rgba(0,0,0,.78); }
   .cm-dialog h2 { display: none; }
 }
