@@ -13,7 +13,7 @@ precision highp float;layout(location=0) in vec2 p;out vec2 uv;void main(){uv=p*
 const STEP=`#version 300 es
 precision highp float;in vec2 uv;out vec4 outColor;
 uniform sampler2D prev;uniform vec2 texel;uniform float dt;uniform float time;uniform float aspect;
-uniform vec2 pointer;uniform vec2 pointerVel;uniform float pointerActive;uniform float hold;uniform float autoPulse;
+uniform vec2 pointer;uniform vec2 pointerVel;uniform float pointerActive;uniform float hold;uniform float autoPulse;uniform vec2 sourceRoot;uniform float sourceSpread;
 float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);} 
 float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);} 
 vec2 sampleVel(vec2 q){return texture(prev,clamp(q,0.0,1.0)).rg;}
@@ -38,7 +38,7 @@ void main(){
  v += vec2(grad.y,-grad.x)*0.24*dt;
  // auto multi-source steam near lower center, pulsing slowly
  float pulse=.78 + .22*sin(time*.55) + .10*sin(time*.21+1.3);
- vec2 srcs[4]; srcs[0]=vec2(.415,.070);srcs[1]=vec2(.478,.058);srcs[2]=vec2(.540,.074);srcs[3]=vec2(.602,.064);
+ vec2 srcs[4]; srcs[0]=sourceRoot+vec2(-.093,.004)*sourceSpread;srcs[1]=sourceRoot+vec2(-.030,-.008)*sourceSpread;srcs[2]=sourceRoot+vec2(.032,.008)*sourceSpread;srcs[3]=sourceRoot+vec2(.094,-.002)*sourceSpread;
  for(int i=0;i<4;i++){
    float phase=float(i)*1.73;
    vec2 source=srcs[i];source.x+=sin(time*(.27+float(i)*.041)+phase)*(.016+.003*float(i));
@@ -113,6 +113,13 @@ canvas.addEventListener('pointerdown',e=>{const p=local(e);pointer.down=true;poi
 canvas.addEventListener('pointermove',e=>{if(!pointer.down)return;const p=local(e),now=performance.now(),dt=Math.max(8,now-pointer.lastMove)/1000;let dx=p.x-pointer.x,dy=p.y-pointer.y;pointer.lastX=pointer.x;pointer.lastY=pointer.y;pointer.x=p.x;pointer.y=p.y;pointer.vx=dx/dt*0.008;pointer.vy=dy/dt*0.008;pointer.lastMove=now;state.pointerMove++;state.splatCount++;state.horizontalImpulse+=Math.abs(pointer.vx);state.verticalImpulse+=Math.abs(pointer.vy);e.preventDefault()},{passive:false});
 function up(e){pointer.down=false;pointer.vx*=.5;pointer.vy*=.5;if(e.type==='pointercancel')state.pointerCancel++;else state.pointerUp++;try{canvas.releasePointerCapture?.(e.pointerId)}catch{} e.preventDefault()}
 canvas.addEventListener('pointerup',up,{passive:false});canvas.addEventListener('pointercancel',up,{passive:false});
+const compareMode=new URLSearchParams(location.search).has('compare');
+function sourcePosition(){
+ if(!compareMode)return {x:.508,y:.066,spread:1};
+ const w=canvas.clientWidth,h=canvas.clientHeight,scale=Math.max(w/1440,h/960),drawnW=1440*scale,drawnH=960*scale;
+ const left=(w-drawnW)*.66,top=(h-drawnH)*.5;
+ return{x:(left+930*scale)/w,y:1-(top+590*scale)/h,spread:.2};
+}
 let last=performance.now(),acc=0,fcount=0,lastHud=last;
 function U(p,n,...v){const l=gl.getUniformLocation(p,n);if(l===null)return;if(v.length===1)gl.uniform1f(l,v[0]);else if(v.length===2)gl.uniform2f(l,v[0],v[1]);}
 function S(p,n,tex,unit){gl.activeTexture(gl.TEXTURE0+unit);gl.bindTexture(gl.TEXTURE_2D,tex);gl.uniform1i(gl.getUniformLocation(p,n),unit)}
@@ -126,7 +133,7 @@ function frame(now){let dt=Math.min(.033,(now-last)/1000||.016);last=now;state.f
  gl.bindFramebuffer(gl.FRAMEBUFFER,auxF[2]);gl.clearColor(0,0,0,1);gl.clear(gl.COLOR_BUFFER_BIT);let pp=2;
  for(let i=0;i<12;i++){let out=pp===2?3:2;target(pressP,auxF[out]);S(pressP,'pressureTex',auxT[pp],0);S(pressP,'divergenceTex',auxT[1],1);gl.drawArrays(gl.TRIANGLES,0,3);pp=out;}
  target(gradP,fbos[1-ping]);S(gradP,'u',textures[ping],0);S(gradP,'pressureTex',auxT[pp],1);gl.drawArrays(gl.TRIANGLES,0,3);ping=1-ping;
- gl.useProgram(stepP);gl.bindFramebuffer(gl.FRAMEBUFFER,fbos[1-ping]);gl.viewport(0,0,W,H);S(stepP,'prev',textures[ping],0);U(stepP,'texel',1/W,1/H);U(stepP,'dt',dt);U(stepP,'time',now/1000);U(stepP,'aspect',canvas.clientWidth/Math.max(1,canvas.clientHeight));U(stepP,'pointer',pointer.x,pointer.y);U(stepP,'pointerVel',pointer.vx,pointer.vy);U(stepP,'pointerActive',pointer.down && (Math.abs(pointer.vx)+Math.abs(pointer.vy)>.00005)?1:0);U(stepP,'hold',hold);U(stepP,'autoPulse',1);gl.drawArrays(gl.TRIANGLES,0,3);ping=1-ping;
+ gl.useProgram(stepP);gl.bindFramebuffer(gl.FRAMEBUFFER,fbos[1-ping]);gl.viewport(0,0,W,H);S(stepP,'prev',textures[ping],0);U(stepP,'texel',1/W,1/H);U(stepP,'dt',dt);U(stepP,'time',now/1000);U(stepP,'aspect',canvas.clientWidth/Math.max(1,canvas.clientHeight));U(stepP,'pointer',pointer.x,pointer.y);U(stepP,'pointerVel',pointer.vx,pointer.vy);U(stepP,'pointerActive',pointer.down && (Math.abs(pointer.vx)+Math.abs(pointer.vy)>.00005)?1:0);U(stepP,'hold',hold);U(stepP,'autoPulse',1);const source=sourcePosition();state.sourceRoot=source;U(stepP,'sourceRoot',source.x,source.y);U(stepP,'sourceSpread',source.spread);gl.drawArrays(gl.TRIANGLES,0,3);ping=1-ping;
  pointer.vx*=.84;pointer.vy*=.84;
  gl.useProgram(renderP);gl.bindFramebuffer(gl.FRAMEBUFFER,null);gl.viewport(0,0,canvas.width,canvas.height);gl.activeTexture(gl.TEXTURE0);gl.bindTexture(gl.TEXTURE_2D,textures[ping]);gl.uniform1i(gl.getUniformLocation(renderP,'stateTex'),0);U(renderP,'time',now/1000);U(renderP,'texel',1/W,1/H);gl.drawArrays(gl.TRIANGLES,0,3);
  const err=gl.getError();if(err!==gl.NO_ERROR){state.lastErr=err;state.webglErrors++;}
